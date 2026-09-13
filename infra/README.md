@@ -11,7 +11,7 @@ Trạng thái: có khung Docker Compose cho development; chưa có hạ tầng t
 
 ## Cấu hình và khởi động
 
-Từ thư mục gốc `smart-garden-plan/`:
+Từ root repository:
 
 ```bash
 cp .env.example .env
@@ -22,18 +22,18 @@ docker compose ps
 
 `.env.example` chỉ chứa giá trị mẫu dành cho development. `.env` bị Git bỏ qua và không được chứa secret dùng thật.
 
-Các cổng host mặc định chỉ bind vào `127.0.0.1`:
+Mặc định chỉ hai dịch vụ cần cho local mobile demo được mở ra LAN tin cậy:
 
 | Service | Cổng mặc định | Ghi chú |
 | --- | --- | --- |
-| Mosquitto | `1883` | Anonymous, chỉ dùng local development |
-| PostgreSQL | `5432` | Dữ liệu giữ trong named volume |
-| FastAPI | `8000` | Endpoint health/readiness |
-| Frontend | `5173` | Dashboard React qua Nginx |
+| Mosquitto | `1883` | Bind `0.0.0.0`, anonymous, chỉ dùng Wi-Fi/hotspot demo tin cậy |
+| PostgreSQL | `5432` | Bind `127.0.0.1`; dữ liệu giữ trong named volume |
+| FastAPI | `8000` | Bind `127.0.0.1`; endpoint health/readiness |
+| Frontend | `5173` | Bind `0.0.0.0`; dashboard React qua Nginx |
 
-Trình duyệt mở `http://127.0.0.1:5173` và gọi `/api`. Chỉ Nginx trong mạng Compose dùng `http://backend:8000`; hostname `backend` không được đưa ra làm địa chỉ truy cập của trình duyệt.
+Trên laptop, trình duyệt mở `http://127.0.0.1:5173`. Điện thoại cùng LAN mở `http://<IP_LAN_LAPTOP>:5173`; ESP32 dùng `<IP_LAN_LAPTOP>:1883` làm broker. Chỉ Nginx trong mạng Compose dùng `http://backend:8000`; hostname `backend` không dùng trên điện thoại hoặc ESP32.
 
-Vì broker không mở ra LAN, ESP32 vật lý chưa thể kết nối từ máy khác. Backend của TASK-000B cũng chưa kết nối MQTT; Mosquitto mới là nền tảng cho simulator và task tích hợp sau.
+`FRONTEND_BIND_ADDRESS` và `MQTT_BIND_ADDRESS` có thể đổi trong `.env`. Chỉ cho phép inbound `5173` và `1883` trên mạng Private; cấu hình anonymous hiện tại không được dùng trên Wi-Fi công cộng hoặc public Internet. Backend vẫn chưa kết nối MQTT; Mosquitto mới là nền tảng cho task tích hợp tiếp theo.
 
 Dừng container nhưng giữ dữ liệu PostgreSQL:
 

@@ -52,7 +52,7 @@ python simulator.py --count 10 --interval 1
 
 ## Chạy trên Windows PowerShell 5.1
 
-Từ thư mục gốc `smart-garden-plan`:
+Từ root repository:
 
 ```powershell
 Set-Location .\simulator

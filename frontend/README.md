@@ -14,14 +14,14 @@ Không có số liệu cảm biến hoặc trạng thái bơm giả trong giao d
 
 ## Chạy cùng Docker Compose
 
-Từ thư mục gốc `smart-garden-plan/`:
+Từ root repository:
 
 ```bash
 cp .env.example .env
 docker compose up --build -d
 ```
 
-Mở <http://127.0.0.1:5173>. `FRONTEND_PORT` trong `.env` đổi cổng trình duyệt truy cập.
+Trên laptop mở <http://127.0.0.1:5173>. Điện thoại cùng Wi-Fi/hotspot mở `http://<IP_LAN_LAPTOP>:5173`. `FRONTEND_PORT` đổi cổng và `FRONTEND_BIND_ADDRESS` đổi địa chỉ bind trong `.env`.
 
 Frontend gọi URL tương đối `/api`. Nginx trong container proxy đường dẫn này tới `http://backend:8000`, trong đó `backend` là hostname nội bộ Docker và không phải địa chỉ dành cho trình duyệt.
 
@@ -34,7 +34,7 @@ npm install
 npm run dev
 ```
 
-Vite phục vụ tại <http://127.0.0.1:5173> và proxy `/api` tới backend local tại <http://127.0.0.1:8000>. Có thể đặt `VITE_API_BASE_URL` thành một URL khác khi build, nhưng URL đó phải truy cập được từ trình duyệt và backend cần cấu hình CORS nếu khác origin.
+Vite phục vụ trên mọi interface ở cổng `5173` để kiểm tra smartphone LAN và proxy `/api` tới backend local tại <http://127.0.0.1:8000>. Có thể đặt `VITE_API_BASE_URL` thành một URL khác khi build, nhưng URL đó phải truy cập được từ trình duyệt và backend cần cấu hình CORS nếu khác origin.
 
 Kiểm tra:
 

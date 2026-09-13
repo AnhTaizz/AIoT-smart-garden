@@ -1,6 +1,8 @@
 # Smart Garden — Kế hoạch triển khai 7 tuần
 
-Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. Repository hiện có khung hạ tầng development, hai endpoint kiểm tra sức khỏe của backend và dashboard React cơ bản; chưa có chức năng IoT nghiệp vụ hoặc kết quả thực nghiệm được xác nhận.
+Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. Repository hiện có khung hạ tầng development, hai endpoint kiểm tra sức khỏe của backend và dashboard React cơ bản; chưa có chức năng IoT nghiệp vụ hoàn chỉnh.
+
+Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
 
 ## Bắt đầu từ đâu?
 
@@ -12,9 +14,25 @@ Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. P
 
 ## Phạm vi sản phẩm
 
-Một khu vực trồng thử nghiệm, ESP32, cảm biến đất Capacitive v1.2, AHT20, relay/bơm, ESP32-CAM. Luồng chính: cảm biến → ESP32 → MQTT/Mosquitto → FastAPI → PostgreSQL → React. Lệnh điều khiển đi ngược về ESP32. Camera gửi ảnh tới backend để xử lý trên máy chủ.
+Một khu vực trồng thử nghiệm, ESP32, cảm biến đất Capacitive v1.2, AHT20, relay/bơm, ESP32-CAM. Luồng chính: cảm biến → ESP32 → MQTT/Mosquitto → FastAPI → PostgreSQL → React. Lệnh điều khiển đi ngược về ESP32 và phải có ACK/state để giao diện không suy đoán trạng thái thiết bị. Camera gửi ảnh tới backend để xử lý trên laptop.
 
-Mục tiêu bắt buộc: giám sát, lưu lịch sử, điều khiển Manual/Auto, tưới có giới hạn, xử lý lỗi cơ bản. Phần nâng cao: camera và một bài toán ML nhỏ có đánh giá; độ phủ xanh bằng HSV là baseline xử lý ảnh, không được gọi là mô hình ML đã huấn luyện. Weather API, nhiều khu vực trồng và tối ưu nâng cao nằm ngoài phạm vi mặc định.
+Mục tiêu bắt buộc: giám sát, lưu lịch sử, điều khiển Manual/Auto từ laptop hoặc điện thoại, tưới có giới hạn và xử lý lỗi cơ bản. Phải hoàn thành luồng IoT end-to-end trước khi tích hợp AI. ESP32-CAM và một bài toán AI baseline nhỏ có đánh giá bắt đầu ở tuần 4; độ phủ xanh bằng HSV là baseline xử lý ảnh, không được gọi là mô hình ML đã huấn luyện. Weather API, nhiều khu vực trồng và tối ưu nâng cao không thuộc core scope.
+
+## Kiến trúc demo local mobile
+
+```text
+Điện thoại ──HTTP qua Wi-Fi/hotspot──> IP LAN laptop:5173
+                                            │
+                                            ▼
+                                      React / Nginx
+                                            │ /api
+                                            ▼
+ESP32 ──MQTT qua Wi-Fi/hotspot──> Mosquitto → FastAPI → PostgreSQL
+                                            │
+                                            └── command → ESP32 → ACK/state
+```
+
+React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng Docker Compose. Điện thoại chỉ cần truy cập dashboard; frontend proxy API trong mạng Docker. ESP32 dùng IP LAN của laptop làm địa chỉ MQTT broker. Không dùng hostname Docker như `frontend`, `backend` hoặc `mosquitto` trên điện thoại/ESP32.
 
 ## Các tài liệu
 
@@ -37,9 +55,10 @@ Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_re
 Để chạy toàn bộ bootstrap cần:
 
 - Docker Engine hoặc Docker Desktop đang hoạt động và có lệnh `docker compose`.
-- Các cổng local mặc định `1883`, `5432`, `8000`, `5173` chưa bị ứng dụng khác sử dụng; có thể đổi trong `.env`.
+- Các cổng mặc định `1883`, `5432`, `8000`, `5173` chưa bị ứng dụng khác sử dụng; có thể đổi trong `.env`.
 - Python 3.10 trở lên và pip nếu chạy simulator trực tiếp trên host.
 - Node.js 22 và npm chỉ khi phát triển frontend ngoài Docker; build Compose đã chứa Node trong image.
+- Wi-Fi hoặc hotspot cho phép laptop, điện thoại và ESP32 nhìn thấy nhau; firewall của laptop cho phép inbound TCP `5173` và `1883` trên mạng riêng khi demo.
 
 Trên Windows dùng Docker Desktop với WSL2 integration nếu chạy lệnh từ WSL. Tất cả cấu hình hiện tại chỉ dành cho development local, không dùng làm cấu hình production.
 
@@ -63,19 +82,28 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Không dùng `cp`, `curl` alias hoặc toán tử `&&` trong các lệnh PowerShell 5.1 ở tài liệu này. `.env.example` chứa giá trị mẫu; thay đổi `.env` cục bộ khi cổng bị chiếm, ví dụ `POSTGRES_PORT=55432`. Không đưa secret thật vào Git.
+Không dùng `cp`, `curl` alias hoặc toán tử `&&` trong các lệnh PowerShell 5.1 ở tài liệu này. `.env.example` chứa giá trị mẫu; `FRONTEND_BIND_ADDRESS` và `MQTT_BIND_ADDRESS` mặc định là `0.0.0.0` để phục vụ thiết bị trong LAN. FastAPI và PostgreSQL vẫn chỉ bind `127.0.0.1`. Thay đổi `.env` cục bộ khi cổng bị chiếm, ví dụ `POSTGRES_PORT=55432`. Không đưa secret thật vào Git.
 
 ## Địa chỉ truy cập
 
-| Thành phần | Địa chỉ development mặc định |
-| --- | --- |
-| Dashboard | <http://127.0.0.1:5173> |
-| Backend health | <http://127.0.0.1:8000/health> |
-| Backend readiness | <http://127.0.0.1:8000/ready> |
-| Mosquitto | `127.0.0.1:1883` |
-| PostgreSQL | `127.0.0.1:5432` |
+| Thành phần | Từ laptop | Từ điện thoại/ESP32 cùng LAN |
+| --- | --- | --- |
+| Dashboard | <http://127.0.0.1:5173> | `http://<IP_LAN_LAPTOP>:5173` |
+| Backend health/readiness | `http://127.0.0.1:8000/health`, `/ready` | Qua dashboard proxy: `http://<IP_LAN_LAPTOP>:5173/api/health`, `/api/ready` |
+| Mosquitto | `127.0.0.1:1883` | `<IP_LAN_LAPTOP>:1883` |
+| PostgreSQL | `127.0.0.1:5432` | Không mở ra LAN |
 
 Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong container frontend mới dùng hostname Docker `backend:8000`. Hostname `backend` chỉ phân giải trong mạng Compose, không phải địa chỉ nhập vào trình duyệt.
+
+## Chạy demo trên điện thoại
+
+1. Cho laptop, điện thoại và ESP32 vào cùng một Wi-Fi/hotspot. Nên dùng hotspot riêng của nhóm thay vì mạng công cộng có client isolation.
+2. Khởi động Compose và xác nhận dashboard mở được trên laptop.
+3. Trên Windows PowerShell, chạy `ipconfig` và lấy IPv4 của adapter Wi-Fi đang dùng, ví dụ `192.168.137.1`.
+4. Nếu Windows Firewall hỏi, chỉ cho phép Docker/dashboard và MQTT trên **Private networks**.
+5. Trên điện thoại mở `http://<IP_LAN_LAPTOP>:5173`. Cấu hình ESP32 dùng cùng IP đó và cổng MQTT `1883`.
+
+Mosquitto hiện cho phép anonymous để bootstrap trên mạng development tin cậy. Không dùng cấu hình này trên Wi-Fi công cộng hoặc public Internet. Nếu điện thoại không mở được dashboard, kiểm tra hai thiết bị có cùng subnet, tắt client isolation và kiểm tra firewall trước khi sửa code.
 
 Kiểm tra backend trên Linux/macOS/WSL:
 
@@ -142,13 +170,7 @@ docker compose down
 
 Lệnh trên giữ named volume PostgreSQL. Không dùng `docker compose down -v` nếu muốn giữ dữ liệu local.
 
-Chi tiết từng phần nằm trong `backend/README.md`, `frontend/README.md`, `simulator/README.md` và `infra/README.md`.
-
-## Cách đưa bộ tài liệu vào repository
-
-Repo mới: đặt nội dung thư mục này tại gốc repo. Repo đã có tài liệu: dùng nhánh riêng, đối chiếu và ghép nội dung; không ghi đè README hay kế hoạch đang dùng mà chưa xem khác biệt. Hướng dẫn cụ thể nằm trong WORKFLOW.
-
-Không có repo đích hoặc tên thành viên được xác nhận khi soạn bộ file. Chưa tạo GitHub Issues, commit hoặc push từ bộ tài liệu này.
+Chi tiết từng phần nằm trong `backend/README.md`, `frontend/README.md`, `simulator/README.md` và `infra/README.md`. Quy trình branch/commit/PR nằm trong `docs/WORKFLOW.md`.
 
 ## Cơ sở lập kế hoạch
 

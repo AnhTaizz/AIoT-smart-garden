@@ -8,7 +8,7 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → UI và lệnh ngược lại có phản hồi.
+Mục tiêu chung: Simulator → MQTT → DB → API → React → smartphone LAN và lệnh ngược lại có ACK/state.
 
 ### B-W1-01 — Dựng broker, database và nhận telemetry
 
@@ -34,7 +34,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 2 — M2
 
-Mục tiêu chung: Cảm biến thật → dashboard; lệnh từ web → relay/bơm có giới hạn.
+Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều khiển bơm qua laptop.
 
 ### B-W2-01 — Chuẩn hóa dữ liệu và trạng thái thiết bị
 
@@ -60,7 +60,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 3 — M3
 
-Mục tiêu chung: Manual/Auto, tưới theo nhịp, giới hạn chạy và xử lý lỗi cơ bản.
+Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### B-W3-01 — API mode/cấu hình và nhật ký tưới
 
@@ -86,7 +86,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 4 — M4
 
-Mục tiêu chung: Ảnh → backend → xử lý; mô hình baseline có đánh giá ban đầu.
+Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
 ### B-W4-01 — API nhận/lưu ảnh và danh sách ảnh
 
@@ -112,7 +112,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 5 — M5
 
-Mục tiêu chung: Một phiên bản tích hợp IoT, dashboard, camera và ML.
+Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 
 ### B-W5-01 — Đóng gói và tích hợp model baseline
 
@@ -138,7 +138,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 6 — M6
 
-Mục tiêu chung: Bản sẵn sàng bảo vệ với số liệu và bằng chứng.
+Mục tiêu chung: Testing/hardening; public Internet deployment chỉ optional nếu core đã ổn định.
 
 ### B-W6-01 — Đo truyền dữ liệu và độ trễ lệnh
 
@@ -164,7 +164,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 7 — M7
 
-Mục tiêu chung: Mô hình + repo + báo cáo + slide + video.
+Mục tiêu chung: Local mobile demo + repo + báo cáo + slide + video.
 
 ### B-W7-01 — Kiểm tra khởi động từ đầu và chốt cấu hình
 

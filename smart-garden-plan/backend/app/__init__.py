@@ -1,0 +1,2 @@
+"""Smart Garden backend package."""
+

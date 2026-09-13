@@ -1,0 +1,56 @@
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Python / FastAPI / simulator / AI
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node.js / React
+node_modules/
+dist/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# ESP32 / PlatformIO build output
+.pio/
+
+# Runtime data and generated artifacts
+*.log
+logs/
+backend/uploads/
+ai/data/
+ai/models/
+ai/artifacts/
+infra/.data/
+infra/mosquitto/data/
+infra/mosquitto/log/
+
+# AI model files should be stored as versioned external artifacts
+*.h5
+*.onnx
+*.pt
+*.pth
+*.tflite
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+

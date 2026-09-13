@@ -54,7 +54,7 @@ Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_re
 
 Để chạy toàn bộ bootstrap cần:
 
-- Docker Engine hoặc Docker Desktop đang hoạt động và có lệnh `docker compose`.
+- Docker Engine hoặc Docker Desktop đang hoạt động và có Docker Compose hỗ trợ YAML tag `!override` (Compose 2.24.4 trở lên).
 - Các cổng mặc định `1883`, `5432`, `8000`, `5173` chưa bị ứng dụng khác sử dụng; có thể đổi trong `.env`.
 - Python 3.10 trở lên và pip nếu chạy simulator trực tiếp trên host.
 - Node.js 22 và npm chỉ khi phát triển frontend ngoài Docker; build Compose đã chứa Node trong image.
@@ -82,28 +82,42 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Không dùng `cp`, `curl` alias hoặc toán tử `&&` trong các lệnh PowerShell 5.1 ở tài liệu này. `.env.example` chứa giá trị mẫu; `FRONTEND_BIND_ADDRESS` và `MQTT_BIND_ADDRESS` mặc định là `0.0.0.0` để phục vụ thiết bị trong LAN. FastAPI và PostgreSQL vẫn chỉ bind `127.0.0.1`. Thay đổi `.env` cục bộ khi cổng bị chiếm, ví dụ `POSTGRES_PORT=55432`. Không đưa secret thật vào Git.
+Không dùng `cp`, `curl` alias hoặc toán tử `&&` trong các lệnh PowerShell 5.1 ở tài liệu này. `.env.example` chứa giá trị mẫu; thay đổi `.env` cục bộ khi cổng bị chiếm, ví dụ `POSTGRES_PORT=55432`. Không đưa secret thật vào Git.
+
+Lệnh Compose mặc định ở trên là **development mode**: cả bốn cổng chỉ bind `127.0.0.1`, nên máy khác trong LAN không truy cập được.
 
 ## Địa chỉ truy cập
 
-| Thành phần | Từ laptop | Từ điện thoại/ESP32 cùng LAN |
+| Thành phần | Development mode | LAN demo mode |
 | --- | --- | --- |
 | Dashboard | <http://127.0.0.1:5173> | `http://<IP_LAN_LAPTOP>:5173` |
-| Backend health/readiness | `http://127.0.0.1:8000/health`, `/ready` | Qua dashboard proxy: `http://<IP_LAN_LAPTOP>:5173/api/health`, `/api/ready` |
+| Backend health/readiness | `http://127.0.0.1:8000/health`, `/ready` | Không expose trực tiếp; điện thoại dùng `/api/health`, `/api/ready` qua dashboard |
 | Mosquitto | `127.0.0.1:1883` | `<IP_LAN_LAPTOP>:1883` |
-| PostgreSQL | `127.0.0.1:5432` | Không mở ra LAN |
+| PostgreSQL | `127.0.0.1:5432` | Vẫn chỉ `127.0.0.1`; không expose ra LAN |
 
 Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong container frontend mới dùng hostname Docker `backend:8000`. Hostname `backend` chỉ phân giải trong mạng Compose, không phải địa chỉ nhập vào trình duyệt.
 
 ## Chạy demo trên điện thoại
 
 1. Cho laptop, điện thoại và ESP32 vào cùng một Wi-Fi/hotspot. Nên dùng hotspot riêng của nhóm thay vì mạng công cộng có client isolation.
-2. Khởi động Compose và xác nhận dashboard mở được trên laptop.
-3. Trên Windows PowerShell, chạy `ipconfig` và lấy IPv4 của adapter Wi-Fi đang dùng, ví dụ `192.168.137.1`.
-4. Nếu Windows Firewall hỏi, chỉ cho phép Docker/dashboard và MQTT trên **Private networks**.
-5. Trên điện thoại mở `http://<IP_LAN_LAPTOP>:5173`. Cấu hình ESP32 dùng cùng IP đó và cổng MQTT `1883`.
+2. Tìm IP LAN của laptop:
+   - Windows PowerShell 5.1: chạy `ipconfig`, tìm `IPv4 Address` của adapter Wi-Fi đang dùng.
+   - Linux: chạy `hostname -I` và chọn địa chỉ của mạng Wi-Fi/hotspot.
+   - macOS: chạy `ipconfig getifaddr en0` nếu Wi-Fi là interface `en0`.
+3. Khởi động LAN demo từ root repository:
 
-Mosquitto hiện cho phép anonymous để bootstrap trên mạng development tin cậy. Không dùng cấu hình này trên Wi-Fi công cộng hoặc public Internet. Nếu điện thoại không mở được dashboard, kiểm tra hai thiết bị có cùng subnet, tắt client isolation và kiểm tra firewall trước khi sửa code.
+   ```powershell
+   docker compose -f compose.yaml -f compose.lan.yaml config
+   docker compose -f compose.yaml -f compose.lan.yaml up --build -d
+   docker compose -f compose.yaml -f compose.lan.yaml ps
+   ```
+
+4. Xác nhận cột `PORTS`: frontend phải có `0.0.0.0:5173`, Mosquitto có `0.0.0.0:1883`, còn backend/PostgreSQL là `127.0.0.1`.
+5. Nếu Windows Firewall hỏi, chỉ cho phép Docker/dashboard và MQTT trên **Private networks**.
+6. Trên điện thoại mở `http://<IP_LAN_LAPTOP>:<FRONTEND_PORT>`, mặc định là `http://<IP_LAN_LAPTOP>:5173`.
+7. Cấu hình ESP32 dùng `<IP_LAN_LAPTOP>` làm MQTT broker và `MQTT_PORT` làm cổng, mặc định `1883`.
+
+`compose.lan.yaml` chỉ thay port publishing của frontend và Mosquitto; frontend vẫn proxy `/api` tới FastAPI qua mạng Docker. File không chứa IP laptop, vì IP có thể đổi theo Wi-Fi/hotspot. Mosquitto hiện cho phép anonymous cho development/local demo tin cậy; tuyệt đối không dùng cấu hình này trên Wi-Fi công cộng hoặc public Internet. Nếu điện thoại không mở được dashboard, kiểm tra hai thiết bị có cùng subnet, client isolation và firewall trước khi sửa code.
 
 Kiểm tra backend trên Linux/macOS/WSL:
 
@@ -162,10 +176,16 @@ Payload luôn có `simulated: true` và schema `bootstrap-telemetry-v0`. Đây l
 
 ## Dừng môi trường
 
-Bash hoặc PowerShell 5.1:
+Bash hoặc PowerShell 5.1, development mode:
 
 ```text
 docker compose down
+```
+
+LAN demo mode:
+
+```text
+docker compose -f compose.yaml -f compose.lan.yaml down
 ```
 
 Lệnh trên giữ named volume PostgreSQL. Không dùng `docker compose down -v` nếu muốn giữ dữ liệu local.

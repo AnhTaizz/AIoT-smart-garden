@@ -16,7 +16,7 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 - Đã có bootstrap cho Docker Compose, FastAPI health/readiness, dashboard React và simulator MQTT publish.
 - Compose, bốn container, backend, frontend build/test và simulator publish 10 bản tin đã được kiểm tra trong môi trường development; bằng chứng bootstrap tóm tắt ở `docs/BOOTSTRAP_REPORT.md`.
 - PostgreSQL host port `5432` bị lỗi port forwarding trên máy kiểm tra; phiên kiểm tra thành công dùng `POSTGRES_PORT=55432`. Đây là cấu hình local, không đổi cổng nội bộ container.
-- Sau migration, Compose đã build/chạy lại từ root repo; bốn container healthy và health/readiness trực tiếp lẫn qua proxy đều PASS. Stack sau đó được dừng bằng `docker compose stop`, nên container vẫn còn để mở lại trong Docker Desktop và named volume vẫn được giữ.
+- Sau migration, development và LAN demo mode đều đã chạy lại từ root repo; bốn container healthy và health/readiness trực tiếp lẫn qua proxy đều PASS. Stack sau đó được dừng bằng `docker compose stop`, nên container vẫn còn để mở lại trong Docker Desktop và named volume vẫn được giữ.
 - Chưa có backend MQTT subscriber, telemetry storage/API/UI hoặc command hai chiều.
 - Bộ Markdown phân công đã soạn; vẫn chờ nhóm điền danh tính và chốt G01–G03.
 
@@ -30,7 +30,8 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 | `GET /health` | PASS | HTTP 200 khi PostgreSQL chạy và khi PostgreSQL dừng |
 | `GET /ready` | PASS | HTTP 200 khi DB chạy; HTTP 503 khi DB dừng; phục hồi về 200 sau khi DB chạy lại |
 | Frontend | PASS | Vitest 1/1, TypeScript + Vite production build, dashboard và proxy `/api` HTTP 200 |
-| Bind local mobile | PASS cấu hình | Dashboard `5173` và MQTT `1883` bind `0.0.0.0`; API `8000` và PostgreSQL chỉ bind `127.0.0.1` |
+| Development bind | PASS runtime | Base `compose.yaml`: bốn container healthy, cả bốn cổng bind `127.0.0.1` |
+| LAN demo override | PASS runtime | `compose.lan.yaml`: bốn container healthy; chỉ dashboard `5173` và MQTT `1883` bind `0.0.0.0`; API/PostgreSQL vẫn ở `127.0.0.1` |
 | Smartphone/ESP32 qua LAN thật | CHƯA KIỂM TRA | Chưa có điện thoại/ESP32 và mạng demo trong phiên kiểm tra này |
 | Simulator unit test | PASS | 3/3 test |
 | Simulator → Mosquitto | PASS | Publish hữu hạn 10 bản tin; subscriber thật nhận sequence 1–10 |
@@ -71,3 +72,4 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 - 2026-09-13: soạn kế hoạch 7 tuần, 3 task chung và 42 task cá nhân; chưa xác nhận tiến độ triển khai hay hoạt động trên GitHub.
 - 2026-09-13: TASK-000E kiểm tra bootstrap trong môi trường development; sửa timeout readiness qua proxy; Compose/backend/frontend/simulator MQTT đạt các kiểm tra riêng. M1 vẫn chưa nghiệm thu vì thiếu telemetry storage/UI và command hai chiều.
 - 2026-09-13: chuyển project lên root repo và chốt LOCAL MOBILE DEMO; public Internet deployment thành optional, Weather API ngoài core scope, AI đứng sau luồng IoT end-to-end. Không thay đổi trạng thái nghiệm thu M1–M7.
+- 2026-09-13: tách LAN demo sang `compose.lan.yaml`; development mode trở lại localhost-only. Chưa nâng trạng thái milestone vì chưa kiểm tra smartphone/ESP32 thật.

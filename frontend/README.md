@@ -21,7 +21,7 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
-Trên laptop mở <http://127.0.0.1:5173>. Điện thoại cùng Wi-Fi/hotspot mở `http://<IP_LAN_LAPTOP>:5173`. `FRONTEND_PORT` đổi cổng và `FRONTEND_BIND_ADDRESS` đổi địa chỉ bind trong `.env`.
+Development mode chỉ mở <http://127.0.0.1:5173>. Để điện thoại cùng Wi-Fi/hotspot truy cập, chạy `docker compose -f compose.yaml -f compose.lan.yaml up --build -d`, sau đó mở `http://<IP_LAN_LAPTOP>:5173`. `FRONTEND_PORT` trong `.env` đổi cổng.
 
 Frontend gọi URL tương đối `/api`. Nginx trong container proxy đường dẫn này tới `http://backend:8000`, trong đó `backend` là hostname nội bộ Docker và không phải địa chỉ dành cho trình duyệt.
 
@@ -34,7 +34,7 @@ npm install
 npm run dev
 ```
 
-Vite phục vụ trên mọi interface ở cổng `5173` để kiểm tra smartphone LAN và proxy `/api` tới backend local tại <http://127.0.0.1:8000>. Có thể đặt `VITE_API_BASE_URL` thành một URL khác khi build, nhưng URL đó phải truy cập được từ trình duyệt và backend cần cấu hình CORS nếu khác origin.
+Vite development server mặc định chỉ phục vụ `127.0.0.1:5173` và proxy `/api` tới backend local tại <http://127.0.0.1:8000>. LAN demo chính dùng image Nginx qua `compose.lan.yaml`. Có thể đặt `VITE_API_BASE_URL` thành một URL khác khi build, nhưng URL đó phải truy cập được từ trình duyệt và backend cần cấu hình CORS nếu khác origin.
 
 Kiểm tra:
 

@@ -2,7 +2,7 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2.0
     ports:
-      - "${MQTT_BIND_ADDRESS:-0.0.0.0}:${MQTT_PORT:-1883}:1883"
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
     volumes:
       - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
@@ -76,7 +76,7 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
     ports:
-      - "${FRONTEND_BIND_ADDRESS:-0.0.0.0}:${FRONTEND_PORT:-5173}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
     depends_on:
       backend:
         condition: service_started

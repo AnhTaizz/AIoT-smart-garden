@@ -8,24 +8,24 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → API → React → smartphone LAN và lệnh ngược lại có ACK/state.
+Mục tiêu chung: backend nối đủ MQTT subscriber → PostgreSQL → REST API và FastAPI → MQTT command → ACK/state với trạng thái vòng đời rõ ràng.
 
-### B-W1-01 — Dựng broker, database và nhận telemetry
+### B-W1-01 — Nhận và lưu telemetry từ MQTT
 
 - **Owner:** B. **Reviewer:** C. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** G02.
-- **Đầu ra:** Cấu hình dịch vụ; backend subscriber; lưu DB.
-- **Tiêu chí nghiệm thu:** A kết nối được; 10 bản tin hợp lệ được lưu; JSON lỗi không làm dừng dịch vụ; có hướng dẫn chạy.
+- **Phụ thuộc:** G02, A-W1-01; broker/PostgreSQL bootstrap đã có.
+- **Đầu ra:** Backend MQTT subscriber; migration/bảng telemetry; validate và lưu PostgreSQL.
+- **Tiêu chí nghiệm thu:** Ít nhất 10 telemetry hợp lệ từ simulator được lưu và truy vấn lại đúng `device_id`/sequence; JSON lỗi không làm dừng subscriber và không được lưu như dữ liệu hợp lệ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Backlog — broker/database bootstrap đã có; subscriber, migration và telemetry storage chưa bắt đầu.
+- **Issue / PR / bằng chứng:** Chưa có bằng chứng ingest vào PostgreSQL.
 
-### B-W1-02 — API trạng thái, lịch sử và command cơ bản
+### B-W1-02 — REST telemetry và vòng đời command
 
 - **Owner:** B. **Reviewer:** C. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** B-W1-01, A-W1-02.
-- **Đầu ra:** API mẫu; lưu trạng thái lệnh; luồng ack.
-- **Tiêu chí nghiệm thu:** C lấy được telemetry; lệnh tới A; pending/ack/timeout phân biệt rõ; demo M1 hai chiều.
+- **Phụ thuộc:** B-W1-01, A-W1-02, G02.
+- **Đầu ra:** Latest/history API đọc PostgreSQL; API tạo/theo dõi command; MQTT publish control và consume ACK/state.
+- **Tiêu chí nghiệm thu:** Latest/history trả telemetry đã lưu; command có `command_id`; backend phân biệt `pending`, `applied`, `rejected`, `timeout`; HTTP 2xx tạo command không được coi là thiết bị đã áp dụng.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.

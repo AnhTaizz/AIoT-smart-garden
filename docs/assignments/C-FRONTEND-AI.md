@@ -8,24 +8,24 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → API → React → smartphone LAN và lệnh ngược lại có ACK/state.
+Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command đúng vòng đời và chạy được trên smartphone qua LAN.
 
 ### C-W1-01 — Dựng dashboard tối thiểu và nối API
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** G02; nối thật cần B-W1-02.
-- **Đầu ra:** frontend/; thẻ số đo; nút điều khiển; trạng thái chờ.
-- **Tiêu chí nghiệm thu:** Làm với mock theo G02 trước; nối B; demo M1 với simulator; dữ liệu mô phỏng được ghi rõ.
+- **Phụ thuộc:** G02, B-W1-02.
+- **Đầu ra:** Dashboard dùng latest/history API; nút command; trạng thái `pending/applied/rejected/timeout`.
+- **Tiêu chí nghiệm thu:** UI hiển thị telemetry simulator đã đi qua MQTT/PostgreSQL/API; gửi command có `command_id`; chỉ báo thành công khi backend trả trạng thái `applied` từ ACK/state, không dựa vào HTTP 2xx.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Backlog — bootstrap health/readiness UI đã có; telemetry thật và command UI chưa bắt đầu.
+- **Issue / PR / bằng chứng:** Frontend test hiện chỉ chứng minh trạng thái mất kết nối và không tạo số liệu giả.
 
 ### C-W1-02 — Hoàn thiện responsive và kiểm tra smartphone LAN
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** C-W1-01; stack tích hợp M1.
-- **Đầu ra:** Dashboard responsive; checklist IP LAN, hotspot/Wi-Fi và trạng thái mất kết nối.
-- **Tiêu chí nghiệm thu:** Điện thoại cùng LAN mở được dashboard; dữ liệu simulator được ghi rõ; layout và thao tác không yêu cầu desktop.
+- **Phụ thuộc:** C-W1-01; stack tích hợp M1; `compose.lan.yaml`.
+- **Đầu ra:** Dashboard responsive; checklist IP LAN, hotspot/Wi-Fi, frontend `/api` proxy và trạng thái mất kết nối.
+- **Tiêu chí nghiệm thu:** Điện thoại thật cùng LAN mở được dashboard bằng IP laptop, xem telemetry đã lưu và theo dõi command tới kết quả ACK/state; layout và thao tác không yêu cầu desktop.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.

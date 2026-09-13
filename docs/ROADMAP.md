@@ -18,13 +18,43 @@ G01–G02 đi trước task tích hợp; G03 triển khai song song tuần 1. Đ
 
 | Tuần | Phase | Mốc | Đầu ra | Tiêu chí |
 | --- | --- | --- | --- | --- |
-| 1 | Phase 1 — Luồng phần mềm | M1 | Simulator → MQTT → PostgreSQL → API → React → smartphone qua LAN; command ngược lại có ACK/state. | G01–G02 được chốt; điện thoại khác mở được dashboard bằng IP LAN laptop; telemetry mô phỏng được lưu/hiển thị; command và ACK phân biệt đúng. G03 sẵn sàng cho tuần 2. |
+| 1 | Phase 1 — Luồng phần mềm | M1 | `Simulator → MQTT → backend subscriber → PostgreSQL → REST API → React → smartphone LAN`; chiều ngược qua FastAPI/MQTT tới simulator rồi ACK/state về UI. | Chỉ PASS khi toàn bộ checklist M1 dưới đây được chứng minh trong cùng một phiên end-to-end. G03 sẵn sàng cho tuần 2. |
 | 2 | Phase 2 — Phần cứng thật | M2 | ESP32 thật đọc sensor, publish telemetry và điều khiển relay/bơm từ điện thoại. | Lưu hiệu chuẩn; smartphone gửi lệnh qua laptop; ESP32 ACK và bơm khởi động/tắt/tự dừng có giám sát; ghi log tích hợp thật. |
 | 3 | Phase 2 — Điều khiển an toàn | M3 | Manual/Auto, tưới theo nhịp, safety, reconnect và error handling. | Thử đất khô/ẩm, lỗi cảm biến, mất/reconnect Wi-Fi hoặc MQTT, lệnh trùng/hết hạn và giới hạn chạy bơm; IoT end-to-end đủ ổn định để chuyển sang AI. |
 | 4 | Phase 3 — Camera và AI baseline | M4 | ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu. | Có ảnh thật, split dữ liệu, phiên bản model, bảng kết quả và ví dụ lỗi; AI không tham gia quyết định bật bơm an toàn. |
 | 5 | Phase 3 — Tích hợp đầy đủ | M5 | Một phiên bản tích hợp IoT, mobile dashboard, camera và AI. | Kiểm tra luồng thật và lỗi xử lý; inference không chặn telemetry/command; đóng phạm vi chức năng. |
 | 6 | Phase 4 — Kiểm thử và hardening | M6 | Bản local mobile demo sẵn sàng bảo vệ, có số liệu và bằng chứng; cloud deploy chỉ optional. | Không còn lỗi nghiêm trọng về dừng bơm/điều khiển/luồng dữ liệu; thử kéo dài và nhiều tình huống mạng; nếu làm cloud phải tách khỏi độ tin cậy của demo local. |
 | 7 | Phase 5 — Bàn giao | M7 | Repo + báo cáo + slide + video + kịch bản local mobile demo. | Khởi động lại theo README; diễn tập ít nhất hai lượt với smartphone/ESP32; có phương án hotspot dự phòng; giữ vài ngày cuối làm dự phòng. |
+
+### Tiêu chí nghiệm thu bắt buộc của M1
+
+Luồng thuận phải chạy trọn vẹn:
+
+```text
+Simulator → MQTT → backend subscriber → PostgreSQL
+          → latest/history REST API → React → smartphone qua LAN
+```
+
+Luồng ngược phải chạy trọn vẹn:
+
+```text
+smartphone → React → FastAPI → MQTT command → simulator
+           → ACK/state → backend → UI
+```
+
+M1 chỉ được ghi **PASS** khi có bằng chứng cho tất cả điều kiện sau trong cùng phiên bản:
+
+- Telemetry từ simulator được backend subscriber nhận và lưu vào PostgreSQL.
+- REST API latest và history trả đúng telemetry đã lưu.
+- React hiển thị telemetry thật lấy từ API, không dùng số liệu giả.
+- Điện thoại cùng LAN mở và sử dụng được dashboard qua IP LAN laptop.
+- Mỗi command có `command_id` và giữ cùng ID xuyên suốt vòng đời.
+- Simulator nhận được MQTT command.
+- Simulator gửi cả ACK và state tương ứng về MQTT.
+- Backend lưu/theo dõi và phân biệt `pending`, `applied`, `rejected`, `timeout`.
+- UI chỉ báo áp dụng thành công sau ACK/state phù hợp; HTTP 2xx chỉ xác nhận backend đã nhận request.
+
+PASS riêng lẻ của container, health endpoint, MQTT publish, API, UI hoặc LAN binding không được dùng thay bằng chứng end-to-end M1. `docs/INTERFACES.md` phải được A/B/C xác nhận ở G02 trước nghiệm thu.
 
 ## Luồng phụ thuộc chính
 

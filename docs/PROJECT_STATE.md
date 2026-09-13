@@ -34,20 +34,37 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 | LAN demo override | PASS runtime | `compose.lan.yaml`: bốn container healthy; chỉ dashboard `5173` và MQTT `1883` bind `0.0.0.0`; API/PostgreSQL vẫn ở `127.0.0.1` |
 | Smartphone/ESP32 qua LAN thật | CHƯA KIỂM TRA | Chưa có điện thoại/ESP32 và mạng demo trong phiên kiểm tra này |
 | Simulator unit test | PASS | 3/3 test |
-| Simulator → Mosquitto | PASS | Publish hữu hạn 10 bản tin; subscriber thật nhận sequence 1–10 |
+| Simulator → Mosquitto | PASS thành phần | Publish hữu hạn 10 bản tin; `mosquitto_sub` CLI nhận sequence 1–10, chưa phải backend subscriber |
 | Simulator Ctrl+C | PASS | Tiến trình liên tục ghi nhận Ctrl+C, disconnect và thoát mã 0 |
 
 ## Milestone
 
 | Mốc | Tuần | Trạng thái | Bằng chứng | Việc còn thiếu |
 | --- | --- | --- | --- | --- |
-| M1 — Simulator và mobile LAN | 1 | Chưa nghiệm thu | Bootstrap report chỉ chứng minh từng phần | Chưa có MQTT → DB → API → React, smartphone LAN và command/ACK end-to-end; G01–G02 chưa chốt |
+| M1 — Simulator và mobile LAN | 1 | Chưa nghiệm thu | Bootstrap report chỉ chứng minh các phần rời | Chưa có hai chiều end-to-end, backend subscriber/storage/API nghiệp vụ, smartphone thật và command lifecycle; G01–G02 chưa chốt |
 | M2 — Phần cứng thật | 2 | Chưa nghiệm thu | Chưa có | ESP32/sensor/relay/bơm thật và điều khiển từ điện thoại |
 | M3 — Manual/Auto an toàn | 3 | Chưa nghiệm thu | Chưa có | Logic tưới, safety, reconnect và error handling |
 | M4 — ESP32-CAM/AI baseline | 4 | Chưa nghiệm thu | Chưa có | Ảnh thật, dataset/model và image pipeline; chỉ bắt đầu tích hợp sau core IoT |
 | M5 — Tích hợp đầy đủ | 5 | Chưa nghiệm thu | Chưa có | IoT + mobile dashboard + camera/AI và đóng phạm vi |
 | M6 — Testing/hardening | 6 | Chưa nghiệm thu | Chưa có | Kiểm thử, kết quả; cloud deploy là optional |
 | M7 — Bàn giao | 7 | Chưa nghiệm thu | Chưa có | Local mobile demo, repo, báo cáo, slide và video |
+
+### Checklist M1 theo bằng chứng hiện tại
+
+| Điều kiện bắt buộc | Trạng thái thực tế |
+| --- | --- |
+| Simulator telemetry → MQTT → backend subscriber → PostgreSQL | CHƯA ĐẠT — simulator publish được, nhưng chưa có subscriber/storage |
+| Latest REST API | CHƯA CÓ |
+| History REST API | CHƯA CÓ |
+| React hiển thị telemetry thật từ API | CHƯA CÓ — dashboard hiện chỉ có trạng thái health/readiness |
+| Smartphone mở dashboard qua LAN | CHƯA KIỂM TRA trên điện thoại thật |
+| Command có `command_id` | CHƯA CÓ |
+| Simulator nhận MQTT command | CHƯA CÓ |
+| Simulator gửi ACK và state | CHƯA CÓ |
+| Backend phân biệt `pending/applied/rejected/timeout` | CHƯA CÓ |
+| UI không báo thành công chỉ vì HTTP 2xx | CHƯA CÓ luồng command để nghiệm thu |
+
+Vì chưa có điều kiện nào đủ để chứng minh cả hai chiều trong một phiên end-to-end, M1 giữ trạng thái **Chưa nghiệm thu**. Các mục PASS trong bảng bootstrap chỉ là bằng chứng thành phần.
 
 ## Quyết định đang mở
 
@@ -61,11 +78,9 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 
 ## Việc tiếp theo
 
-1. Cả nhóm điền TEAM, chốt G01/G02 và Wi-Fi hoặc hotspot dùng cho demo; A chủ trì G03. Không đổi `INTERFACES.md` sang AGREED trước khi A/B/C xác nhận payload hợp lệ/lỗi.
-2. B: triển khai MQTT subscriber, validate/lưu telemetry, migration PostgreSQL, API đọc dữ liệu và command lifecycle theo G02.
-3. C: nối dashboard với telemetry API thật, kiểm tra bằng IP LAN trên smartphone; giữ `Chưa có dữ liệu` và nút điều khiển disabled tới khi chức năng tương ứng chạy được.
-4. A: đối chiếu simulator với contract G02, bổ sung mô phỏng command/ACK cho M1; sau đó chuyển sang ESP32/sensor/relay thật ở M2.
-5. Cả nhóm nghiệm thu `simulator → MQTT → DB → API → React → smartphone LAN` và command ngược có ACK trước khi bắt đầu tích hợp AI.
+Trước khi coding, cả nhóm điền TEAM và xác nhận G02 trong `INTERFACES.md`; A tiếp tục chủ trì G03 song song.
+
+**Task coding tiếp theo duy nhất:** B-W1-01 — thêm backend MQTT subscriber, migration/bảng telemetry và lưu hợp lệ payload từ simulator vào PostgreSQL. Chưa gộp latest/history API, command hoặc UI vào task này.
 
 ## Nhật ký thay đổi
 
@@ -73,3 +88,4 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 - 2026-09-13: TASK-000E kiểm tra bootstrap trong môi trường development; sửa timeout readiness qua proxy; Compose/backend/frontend/simulator MQTT đạt các kiểm tra riêng. M1 vẫn chưa nghiệm thu vì thiếu telemetry storage/UI và command hai chiều.
 - 2026-09-13: chuyển project lên root repo và chốt LOCAL MOBILE DEMO; public Internet deployment thành optional, Weather API ngoài core scope, AI đứng sau luồng IoT end-to-end. Không thay đổi trạng thái nghiệm thu M1–M7.
 - 2026-09-13: tách LAN demo sang `compose.lan.yaml`; development mode trở lại localhost-only. Chưa nâng trạng thái milestone vì chưa kiểm tra smartphone/ESP32 thật.
+- 2026-09-13: thống nhất checklist M1 hai chiều từ simulator tới smartphone và ngược lại; toàn bộ tiêu chí M1 vẫn chưa nghiệm thu theo bằng chứng hiện có.

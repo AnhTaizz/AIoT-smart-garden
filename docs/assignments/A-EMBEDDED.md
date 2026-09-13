@@ -8,24 +8,24 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → API → React → smartphone LAN và lệnh ngược lại có ACK/state.
+Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát telemetry và nhận command có `command_id`, rồi gửi ACK/state tương ứng.
 
 ### A-W1-01 — Dựng simulator telemetry
 
 - **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** G02.
-- **Đầu ra:** simulator/ và hướng dẫn phát bản tin.
-- **Tiêu chí nghiệm thu:** B nhận được 10 bản tin hợp lệ có device_id và sequence; chế độ simulated được ghi rõ.
+- **Phụ thuộc:** G02; tích hợp lưu thật cần B-W1-01.
+- **Đầu ra:** `simulator/`, payload telemetry theo G02 và hướng dẫn phát bản tin.
+- **Tiêu chí nghiệm thu:** Phát được ít nhất 10 bản tin hợp lệ có `device_id` và sequence; B-W1-01 lưu được chúng vào PostgreSQL; dữ liệu `simulated` được ghi rõ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Backlog — bootstrap publish đã có, nhưng task theo contract G02 và lưu DB end-to-end chưa bắt đầu.
+- **Issue / PR / bằng chứng:** `docs/BOOTSTRAP_REPORT.md` mới chứng minh publish và `mosquitto_sub` CLI riêng lẻ, chưa có backend subscriber.
 
 ### A-W1-02 — Simulator nhận command và báo trạng thái
 
 - **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** A-W1-01, B-W1-01, G02.
-- **Đầu ra:** Luồng nhận lệnh, command_id và xác nhận.
-- **Tiêu chí nghiệm thu:** Lệnh bật/tắt đổi trạng thái giả; lệnh trùng không khởi động lại bộ đếm; B/C xem được phản hồi.
+- **Phụ thuộc:** A-W1-01, G02; tích hợp kết quả với B-W1-02.
+- **Đầu ra:** Subscribe `garden/node_01/control`; xử lý `command_id`; publish ACK và state trên hai topic tương ứng.
+- **Tiêu chí nghiệm thu:** Simulator nhận command, giữ nguyên `command_id`, gửi ACK `applied` hoặc `rejected` và state có `last_command_id`; lệnh trùng không khởi động lại bộ đếm; backend/UI quan sát đúng kết quả.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.

@@ -13,7 +13,7 @@ Backend hiện là một dịch vụ FastAPI tối thiểu chạy bằng Uvicorn
 
 ## Chạy bằng Docker Compose
 
-Từ thư mục gốc `smart-garden-plan/`:
+Từ root repository:
 
 ```bash
 cp .env.example .env

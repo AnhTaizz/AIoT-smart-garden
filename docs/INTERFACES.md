@@ -1,25 +1,49 @@
 # Thỏa thuận giao tiếp — Bản nháp cho G02
 
-Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Đây là danh sách quyết định để ba mảng làm việc cùng nhau, chưa phải đặc tả kỹ thuật đã triển khai. B chủ trì, A/C cùng kiểm tra. Sau G02 bổ sung payload/API cụ thể và đổi trạng thái thành AGREED kèm ngày và PR.
+Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. B chủ trì, A/C cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR.
 
 ## Ranh giới xử lý
 
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
 
-## MQTT đề xuất
+## Luồng bắt buộc của M1
 
-| Luồng | Topic dự kiến | Nội dung phải chốt |
+```text
+Simulator → MQTT → backend subscriber → PostgreSQL
+          → latest/history REST API → React → smartphone qua LAN
+
+smartphone → React → FastAPI → MQTT command → simulator
+           → ACK/state → backend → UI
+```
+
+Hai luồng phải chạy trên cùng phiên bản và cùng `device_id`. Kiểm tra riêng publisher/subscriber, database, API, UI hoặc LAN không đủ để nghiệm thu M1.
+
+## MQTT cho M1
+
+Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống nhất trong M1, còn chi tiết payload phải được A/B/C xác nhận ở G02:
+
+| Luồng | Topic M1 | Nội dung tối thiểu cần xác nhận |
 | --- | --- | --- |
 | Telemetry | garden/node_01/telemetry | device_id, boot_id/sequence nếu khử trùng, thời gian đo, giá trị/đơn vị, sensor_status, mode, relay_state |
 | Command | garden/node_01/control | command_id, hành động, tham số, thời hạn; quy tắc kiểm tra tính hợp lệ |
 | Xác nhận | garden/node_01/ack | command_id, accepted/rejected/applied, lý do và thời gian |
-| Trạng thái | garden/node_01/state | Trạng thái mode/relay/cấu hình thực tế, last_seen hoặc cơ chế online/offline đã chốt |
+| Trạng thái | garden/node_01/state | device_id, mode/relay/cấu hình thực tế, last_command_id, thời gian báo trạng thái |
 
 - Chốt QoS và retained cho từng topic. Không giữ retained lệnh bật bơm để thiết bị chạy lại lệnh cũ khi kết nối.
 - Lệnh có ID để nhận biết trùng; nhận lại cùng ID không kéo dài giới hạn chạy. Chốt cửa sổ lưu ID và hành vi qua khởi động lại.
 - Chốt cách từ chối lệnh hết hạn và xử lý khi đồng hồ thiết bị chưa đồng bộ. TTL không thay thế giới hạn thời gian chạy cục bộ.
 - Backend/UI phân biệt yêu cầu đã gửi, thiết bị chấp nhận và trạng thái được áp dụng. ACK không chứng minh có dòng nước thật.
 - Chốt ngưỡng xác định dữ liệu cũ/offline, cách lưu bản tin tới trễ và thứ tự bản tin.
+
+## Vòng đời command bắt buộc cho M1
+
+1. FastAPI nhận request hợp lệ, tạo/trả `command_id`, lưu trạng thái `pending` và publish cùng ID lên `garden/node_01/control`.
+2. HTTP 2xx chỉ có nghĩa backend đã nhận request; frontend tiếp tục hiển thị `pending`, không báo thiết bị đã thực hiện.
+3. Simulator nhận command và gửi ACK có cùng `command_id`. ACK `accepted` vẫn là trạng thái chờ; ACK `rejected` chuyển backend sang `rejected` và giữ lý do.
+4. Khi áp dụng lệnh, simulator gửi ACK `applied` và state có `last_command_id` tương ứng cùng trạng thái thực tế. Backend chỉ chuyển sang `applied` khi thông tin nhận được khớp command.
+5. Nếu không có kết quả cuối trong thời hạn đã chốt, backend chuyển sang `timeout`. ACK tới trễ phải được ghi nhận nhưng không được làm UI âm thầm báo thành công; cách hòa giải chi tiết chốt ở G02.
+
+Backend và API phục vụ UI phải phân biệt tối thiểu bốn trạng thái `pending`, `applied`, `rejected`, `timeout`. Frontend hiển thị trạng thái backend trả về, không suy luận thành công từ mã HTTP của request tạo command.
 
 ## Dữ liệu và điều khiển
 
@@ -35,14 +59,21 @@ ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm
 
 Ngưỡng tưới và thời lượng là tham số phải kiểm tra trên cây/chậu/bơm thực tế; tài liệu này không gán giá trị mặc định dùng ngay ngoài thực nghiệm.
 
-## API phục vụ frontend — dự kiến
+## REST API bắt buộc cho M1 — dự kiến
 
 | Nhu cầu | API gợi ý | Điều phải thống nhất |
 | --- | --- | --- |
 | Dữ liệu mới nhất | GET /devices/{id}/latest | sensor_status, timestamp, stale, mode, relay_state |
 | Lịch sử | GET /devices/{id}/telemetry | from/to, giới hạn, thứ tự thời gian |
-| Gửi lệnh | POST /devices/{id}/commands | kiểm tra input, command_id, pending; không trả thành công thiết bị ngay |
-| Theo dõi lệnh | GET /commands/{command_id} | ack/state, timeout, lỗi, ack tới trễ |
+| Gửi lệnh | POST /devices/{id}/commands | kiểm tra input; trả command_id và pending, không trả thành công thiết bị |
+| Theo dõi lệnh | GET /commands/{command_id} | pending/applied/rejected/timeout, ACK/state, lý do và ACK tới trễ |
+
+`latest` và `history` phải đọc telemetry đã lưu trong PostgreSQL, không trả mock hoặc chỉ phản chiếu payload trong bộ nhớ. Điện thoại gọi các API qua cùng origin dashboard `/api`; FastAPI không cần expose trực tiếp ra LAN.
+
+## API sau M1 — dự kiến
+
+| Nhu cầu | API gợi ý | Điều phải thống nhất |
+| --- | --- | --- |
 | Cấu hình | GET/PUT /devices/{id}/config | requested/applied; phiên bản cấu hình |
 | Upload ảnh | POST /devices/{id}/images | multipart, giới hạn file, metadata và image_id |
 | Xem ảnh/kết quả | GET /devices/{id}/images | image_id, captured_at, trạng thái xử lý, model_version, kết quả/lỗi |

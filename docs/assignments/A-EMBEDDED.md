@@ -8,24 +8,24 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → UI và lệnh ngược lại có phản hồi.
+Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát telemetry và nhận command có `command_id`, rồi gửi ACK/state tương ứng.
 
 ### A-W1-01 — Dựng simulator telemetry
 
 - **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** G02.
-- **Đầu ra:** simulator/ và hướng dẫn phát bản tin.
-- **Tiêu chí nghiệm thu:** B nhận được 10 bản tin hợp lệ có device_id và sequence; chế độ simulated được ghi rõ.
+- **Phụ thuộc:** G02; tích hợp lưu thật cần B-W1-01.
+- **Đầu ra:** `simulator/`, payload telemetry theo G02 và hướng dẫn phát bản tin.
+- **Tiêu chí nghiệm thu:** Phát được ít nhất 10 bản tin hợp lệ có `device_id` và sequence; B-W1-01 lưu được chúng vào PostgreSQL; dữ liệu `simulated` được ghi rõ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Backlog — bootstrap publish đã có, nhưng task theo contract G02 và lưu DB end-to-end chưa bắt đầu.
+- **Issue / PR / bằng chứng:** `docs/BOOTSTRAP_REPORT.md` mới chứng minh publish và `mosquitto_sub` CLI riêng lẻ, chưa có backend subscriber.
 
 ### A-W1-02 — Simulator nhận command và báo trạng thái
 
 - **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** A-W1-01, B-W1-01, G02.
-- **Đầu ra:** Luồng nhận lệnh, command_id và xác nhận.
-- **Tiêu chí nghiệm thu:** Lệnh bật/tắt đổi trạng thái giả; lệnh trùng không khởi động lại bộ đếm; B/C xem được phản hồi.
+- **Phụ thuộc:** A-W1-01, G02; tích hợp kết quả với B-W1-02.
+- **Đầu ra:** Subscribe `garden/node_01/control`; xử lý `command_id`; publish ACK và state trên hai topic tương ứng.
+- **Tiêu chí nghiệm thu:** Simulator nhận command, giữ nguyên `command_id`, gửi ACK `applied` hoặc `rejected` và state có `last_command_id`; lệnh trùng không khởi động lại bộ đếm; backend/UI quan sát đúng kết quả.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -34,7 +34,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 2 — M2
 
-Mục tiêu chung: Cảm biến thật → dashboard; lệnh từ web → relay/bơm có giới hạn.
+Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều khiển bơm qua laptop.
 
 ### A-W2-01 — Đọc cảm biến và hiệu chuẩn
 
@@ -60,7 +60,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 3 — M3
 
-Mục tiêu chung: Manual/Auto, tưới theo nhịp, giới hạn chạy và xử lý lỗi cơ bản.
+Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### A-W3-01 — Hoàn thiện logic tưới và lỗi
 
@@ -72,12 +72,12 @@ Mục tiêu chung: Manual/Auto, tưới theo nhịp, giới hạn chạy và x�
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
 
-### A-W3-02 — Thử camera và bàn giao mẫu ảnh
+### A-W3-02 — Hoàn thiện reconnect và xử lý lỗi thiết bị
 
 - **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** G03; camera đã nhận.
-- **Đầu ra:** Firmware chụp ảnh thử; bộ ảnh có thời gian/điều kiện.
-- **Tiêu chí nghiệm thu:** Camera chụp/gửi được ảnh thử qua endpoint hoặc công cụ nhận thử có hướng dẫn; C đọc được ảnh; ghi vấn đề nguồn/góc chụp.
+- **Phụ thuộc:** A-W3-01, A-W2-02, G02.
+- **Đầu ra:** Firmware phục hồi Wi-Fi/MQTT; trạng thái offline/reconnect; xử lý sensor/command lỗi.
+- **Tiêu chí nghiệm thu:** Thử mất mạng và broker, reconnect không tự bật bơm hoặc chạy lại lệnh cũ; lỗi cảm biến vẫn giữ giới hạn an toàn và được báo rõ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -86,7 +86,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 4 — M4
 
-Mục tiêu chung: Ảnh → backend → xử lý; mô hình baseline có đánh giá ban đầu.
+Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
 ### A-W4-01 — Camera định kỳ và bộ ảnh thực
 
@@ -112,7 +112,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 5 — M5
 
-Mục tiêu chung: Một phiên bản tích hợp IoT, dashboard, camera và ML.
+Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 
 ### A-W5-01 — Kiểm tra camera trong hệ thống chung
 
@@ -138,7 +138,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 6 — M6
 
-Mục tiêu chung: Bản sẵn sàng bảo vệ với số liệu và bằng chứng.
+Mục tiêu chung: Testing/hardening; public Internet deployment chỉ optional nếu core đã ổn định.
 
 ### A-W6-01 — Thử lỗi và chạy kéo dài có giám sát
 
@@ -164,7 +164,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 7 — M7
 
-Mục tiêu chung: Mô hình + repo + báo cáo + slide + video.
+Mục tiêu chung: Local mobile demo + repo + báo cáo + slide + video.
 
 ### A-W7-01 — Đóng gói mô hình và hướng dẫn thiết bị
 

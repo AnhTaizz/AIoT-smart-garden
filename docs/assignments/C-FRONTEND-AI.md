@@ -8,24 +8,24 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → UI và lệnh ngược lại có phản hồi.
+Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command đúng vòng đời và chạy được trên smartphone qua LAN.
 
 ### C-W1-01 — Dựng dashboard tối thiểu và nối API
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** G02; nối thật cần B-W1-02.
-- **Đầu ra:** frontend/; thẻ số đo; nút điều khiển; trạng thái chờ.
-- **Tiêu chí nghiệm thu:** Làm với mock theo G02 trước; nối B; demo M1 với simulator; dữ liệu mô phỏng được ghi rõ.
+- **Phụ thuộc:** G02, B-W1-02.
+- **Đầu ra:** Dashboard dùng latest/history API; nút command; trạng thái `pending/applied/rejected/timeout`.
+- **Tiêu chí nghiệm thu:** UI hiển thị telemetry simulator đã đi qua MQTT/PostgreSQL/API; gửi command có `command_id`; chỉ báo thành công khi backend trả trạng thái `applied` từ ACK/state, không dựa vào HTTP 2xx.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Backlog — bootstrap health/readiness UI đã có; telemetry thật và command UI chưa bắt đầu.
+- **Issue / PR / bằng chứng:** Frontend test hiện chỉ chứng minh trạng thái mất kết nối và không tạo số liệu giả.
 
-### C-W1-02 — Khảo sát dữ liệu và bài toán AI
+### C-W1-02 — Hoàn thiện responsive và kiểm tra smartphone LAN
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** G01.
-- **Đầu ra:** Danh sách nguồn ảnh, quyền sử dụng, nhãn và loại cây dự kiến.
-- **Tiêu chí nghiệm thu:** Nêu dữ liệu nào dùng được, số lượng khảo sát thực, khả năng có ảnh camera; không mặc định normal/abnormal nếu nhãn không hỗ trợ.
+- **Phụ thuộc:** C-W1-01; stack tích hợp M1; `compose.lan.yaml`.
+- **Đầu ra:** Dashboard responsive; checklist IP LAN, hotspot/Wi-Fi, frontend `/api` proxy và trạng thái mất kết nối.
+- **Tiêu chí nghiệm thu:** Điện thoại thật cùng LAN mở được dashboard bằng IP laptop, xem telemetry đã lưu và theo dõi command tới kết quả ACK/state; layout và thao tác không yêu cầu desktop.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -34,7 +34,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 2 — M2
 
-Mục tiêu chung: Cảm biến thật → dashboard; lệnh từ web → relay/bơm có giới hạn.
+Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều khiển bơm qua laptop.
 
 ### C-W2-01 — Biểu đồ lịch sử và trạng thái thiết bị
 
@@ -46,12 +46,12 @@ Mục tiêu chung: Cảm biến thật → dashboard; lệnh từ web → relay/
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
 
-### C-W2-02 — Chuẩn bị dataset và quy tắc gán nhãn
+### C-W2-02 — Hoàn thiện UI command và ACK thiết bị thật
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** C-W1-02.
-- **Đầu ra:** Manifest dữ liệu; thống kê lớp; mẫu ảnh; đề xuất split.
-- **Tiêu chí nghiệm thu:** Truy được nguồn và nhãn; ghi ảnh trùng/gần trùng; chốt phạm vi cây phù hợp; chưa đưa test vào train.
+- **Phụ thuộc:** C-W2-01, A-W2-02, B-W2-02.
+- **Đầu ra:** UI gửi lệnh, pending/ACK/rejected/timeout và trạng thái bơm do ESP32 xác nhận.
+- **Tiêu chí nghiệm thu:** Điện thoại điều khiển được bơm trong bài test có giám sát; UI không báo thành công chỉ dựa trên HTTP response.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -60,7 +60,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 3 — M3
 
-Mục tiêu chung: Manual/Auto, tưới theo nhịp, giới hạn chạy và xử lý lỗi cơ bản.
+Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### C-W3-01 — UI Auto/Manual, cấu hình và lịch sử tưới
 
@@ -72,12 +72,12 @@ Mục tiêu chung: Manual/Auto, tưới theo nhịp, giới hạn chạy và x�
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
 
-### C-W3-02 — Chốt bài toán ML và kiểm tra pipeline dữ liệu
+### C-W3-02 — Kiểm tra UX khi reconnect và lỗi an toàn
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 3 giờ.
-- **Phụ thuộc:** C-W2-02, A-W3-02.
-- **Đầu ra:** Quyết định nhãn, split train/val/test; thử nạp và xử lý ảnh.
-- **Tiêu chí nghiệm thu:** Cả nhóm chốt khả thi ở M3; ảnh cùng cây/phiên chụp không rò giữa các split khi có thông tin nhóm; ghi giới hạn metadata; đọc được ảnh A.
+- **Phụ thuộc:** C-W2-02, A-W3-01, A-W3-02, B-W3-02.
+- **Đầu ra:** UI offline/stale/reconnect, lỗi sensor/command và hành động dừng rõ ràng.
+- **Tiêu chí nghiệm thu:** Smartphone hiển thị đúng khi mất/phục hồi kết nối; không suy đoán relay state; lỗi API/MQTT không vô hiệu hóa khả năng nhận biết trạng thái nguy hiểm.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -86,14 +86,14 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 4 — M4
 
-Mục tiêu chung: Ảnh → backend → xử lý; mô hình baseline có đánh giá ban đầu.
+Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
 ### C-W4-01 — Huấn luyện baseline ML nhỏ
 
 - **Owner:** C. **Reviewer:** B. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** C-W3-02.
-- **Đầu ra:** Script huấn luyện/inference; model; cấu hình và seed.
-- **Tiêu chí nghiệm thu:** Chạy được pipeline; chọn model bằng validation; ghi phiên bản dataset, tham số và nhãn; giữ test cho đánh giá.
+- **Phụ thuộc:** M3 đã nghiệm thu, G01, A-W4-01.
+- **Đầu ra:** Quyết định nhãn/split, manifest dữ liệu, script huấn luyện/inference, model, cấu hình và seed.
+- **Tiêu chí nghiệm thu:** Chạy được pipeline; truy được nguồn/nhãn; chọn model bằng validation; ghi phiên bản dataset và tham số; giữ test cho đánh giá.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -112,7 +112,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 5 — M5
 
-Mục tiêu chung: Một phiên bản tích hợp IoT, dashboard, camera và ML.
+Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 
 ### C-W5-01 — Tích hợp UI ảnh và kết quả AI
 
@@ -138,7 +138,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 6 — M6
 
-Mục tiêu chung: Bản sẵn sàng bảo vệ với số liệu và bằng chứng.
+Mục tiêu chung: Testing/hardening; public Internet deployment chỉ optional nếu core đã ổn định.
 
 ### C-W6-01 — Kiểm thử UI và toàn luồng người dùng
 
@@ -164,7 +164,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 7 — M7
 
-Mục tiêu chung: Mô hình + repo + báo cáo + slide + video.
+Mục tiêu chung: Local mobile demo + repo + báo cáo + slide + video.
 
 ### C-W7-01 — Tổng hợp hình ảnh, slide và kịch bản demo
 

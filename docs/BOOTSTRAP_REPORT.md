@@ -24,7 +24,7 @@ TASK-000A chỉ dựng cấu trúc repository và mô tả ranh giới các thà
 - Tạo `infra/README.md`: phạm vi Mosquitto, PostgreSQL và hướng container hóa sau này.
 - Tạo `.gitignore` cho secret cục bộ, môi trường Python/Node, kết quả build ESP32, dữ liệu runtime và artifact AI lớn.
 
-Các thư mục được đặt dưới `smart-garden-plan/`, cùng cấp với `docs/` hiện hữu. Không di chuyển hoặc tạo lại tài liệu và template đã có.
+Ở thời điểm TASK-000A, các thư mục được đặt trong một thư mục kế hoạch lồng, cùng cấp với `docs/` hiện hữu. Sau đó project đã được chuyển an toàn lên root repository; không tạo lại tài liệu và template đã có.
 
 ## Kiến trúc được giữ nguyên
 
@@ -238,3 +238,15 @@ Các cảnh báo readiness khi PostgreSQL bị dừng và log shutdown database 
 - Cả nhóm: điền TEAM/G01, tạo Issues tuần 1 và nghiệm thu lại toàn luồng. M1 **CHƯA ĐẠT/CHƯA NGHIỆM THU** vì chưa có `MQTT → DB → API → UI` và command hai chiều.
 
 Không commit, push hoặc merge trong TASK-000E.
+
+## Sau TASK-000E — root migration và LOCAL MOBILE DEMO
+
+- Đã chuyển toàn bộ project từ thư mục kế hoạch lồng lên root repository; `.env` ignored cũng được giữ ở root và thư mục cũ đã được xóa sau khi rỗng.
+- Demo chính được chốt là laptop chạy React/FastAPI/Mosquitto/PostgreSQL, còn smartphone và ESP32 cùng Wi-Fi/hotspot truy cập bằng IP LAN laptop.
+- Base `compose.yaml` giữ development localhost-only. LAN demo dùng `compose.lan.yaml` để mở riêng frontend `5173` và MQTT `1883` trên `0.0.0.0`; FastAPI `8000` và PostgreSQL vẫn chỉ bind `127.0.0.1`.
+- Public Internet deployment chuyển thành optional ở tuần 6; Weather API ngoài core scope; AI chỉ tích hợp sau khi IoT end-to-end đạt tiêu chí M3.
+- Sau migration, `docker compose config`, frontend test/build, bốn container healthy, `/health`, `/ready` và proxy `/api` đều **PASS** từ root repo. Simulator unit test **PASS 3/3**.
+- Truy cập bằng smartphone và kết nối ESP32 qua LAN thật: **CHƯA KIỂM TRA** vì phiên xác minh không có hai thiết bị này.
+- Sau khi tách mode, cả base development và LAN override đều `docker compose config` **PASS**. Hai mode lần lượt được chạy thật: development giữ cả bốn port ở `127.0.0.1`; LAN override chỉ mở frontend/MQTT trên `0.0.0.0`. Bốn container và các endpoint health/readiness/proxy đều **PASS** ở cả hai mode.
+
+Các kết quả trên không thay đổi trạng thái nghiệm thu M1–M7. Stack được dừng bằng `docker compose stop` sau xác minh để container còn hiển thị trong Docker Desktop.

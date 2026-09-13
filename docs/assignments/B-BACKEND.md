@@ -8,24 +8,24 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 ## Tuần 1 — M1
 
-Mục tiêu chung: Simulator → MQTT → DB → UI và lệnh ngược lại có phản hồi.
+Mục tiêu chung: backend nối đủ MQTT subscriber → PostgreSQL → REST API và FastAPI → MQTT command → ACK/state với trạng thái vòng đời rõ ràng.
 
-### B-W1-01 — Dựng broker, database và nhận telemetry
+### B-W1-01 — Nhận và lưu telemetry từ MQTT
 
 - **Owner:** B. **Reviewer:** C. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** G02.
-- **Đầu ra:** Cấu hình dịch vụ; backend subscriber; lưu DB.
-- **Tiêu chí nghiệm thu:** A kết nối được; 10 bản tin hợp lệ được lưu; JSON lỗi không làm dừng dịch vụ; có hướng dẫn chạy.
+- **Phụ thuộc:** G02, A-W1-01; broker/PostgreSQL bootstrap đã có.
+- **Đầu ra:** Backend MQTT subscriber; migration/bảng telemetry; validate và lưu PostgreSQL.
+- **Tiêu chí nghiệm thu:** Ít nhất 10 telemetry hợp lệ từ simulator được lưu và truy vấn lại đúng `device_id`/sequence; JSON lỗi không làm dừng subscriber và không được lưu như dữ liệu hợp lệ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Backlog — broker/database bootstrap đã có; subscriber, migration và telemetry storage chưa bắt đầu.
+- **Issue / PR / bằng chứng:** Chưa có bằng chứng ingest vào PostgreSQL.
 
-### B-W1-02 — API trạng thái, lịch sử và command cơ bản
+### B-W1-02 — REST telemetry và vòng đời command
 
 - **Owner:** B. **Reviewer:** C. **Ước lượng:** 4 giờ.
-- **Phụ thuộc:** B-W1-01, A-W1-02.
-- **Đầu ra:** API mẫu; lưu trạng thái lệnh; luồng ack.
-- **Tiêu chí nghiệm thu:** C lấy được telemetry; lệnh tới A; pending/ack/timeout phân biệt rõ; demo M1 hai chiều.
+- **Phụ thuộc:** B-W1-01, A-W1-02, G02.
+- **Đầu ra:** Latest/history API đọc PostgreSQL; API tạo/theo dõi command; MQTT publish control và consume ACK/state.
+- **Tiêu chí nghiệm thu:** Latest/history trả telemetry đã lưu; command có `command_id`; backend phân biệt `pending`, `applied`, `rejected`, `timeout`; HTTP 2xx tạo command không được coi là thiết bị đã áp dụng.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -34,7 +34,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 2 — M2
 
-Mục tiêu chung: Cảm biến thật → dashboard; lệnh từ web → relay/bơm có giới hạn.
+Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều khiển bơm qua laptop.
 
 ### B-W2-01 — Chuẩn hóa dữ liệu và trạng thái thiết bị
 
@@ -60,7 +60,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 3 — M3
 
-Mục tiêu chung: Manual/Auto, tưới theo nhịp, giới hạn chạy và xử lý lỗi cơ bản.
+Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### B-W3-01 — API mode/cấu hình và nhật ký tưới
 
@@ -86,7 +86,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 4 — M4
 
-Mục tiêu chung: Ảnh → backend → xử lý; mô hình baseline có đánh giá ban đầu.
+Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
 ### B-W4-01 — API nhận/lưu ảnh và danh sách ảnh
 
@@ -112,7 +112,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 5 — M5
 
-Mục tiêu chung: Một phiên bản tích hợp IoT, dashboard, camera và ML.
+Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 
 ### B-W5-01 — Đóng gói và tích hợp model baseline
 
@@ -138,7 +138,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 6 — M6
 
-Mục tiêu chung: Bản sẵn sàng bảo vệ với số liệu và bằng chứng.
+Mục tiêu chung: Testing/hardening; public Internet deployment chỉ optional nếu core đã ổn định.
 
 ### B-W6-01 — Đo truyền dữ liệu và độ trễ lệnh
 
@@ -164,7 +164,7 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 ## Tuần 7 — M7
 
-Mục tiêu chung: Mô hình + repo + báo cáo + slide + video.
+Mục tiêu chung: Local mobile demo + repo + báo cáo + slide + video.
 
 ### B-W7-01 — Kiểm tra khởi động từ đầu và chốt cấu hình
 

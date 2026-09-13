@@ -1,0 +1,9 @@
+# Local LAN demo override. Use only on a trusted Wi-Fi/hotspot.
+services:
+  mosquitto:
+    ports: !override
+      - "0.0.0.0:${MQTT_PORT:-1883}:1883"
+
+  frontend:
+    ports: !override
+      - "0.0.0.0:${FRONTEND_PORT:-5173}:80"

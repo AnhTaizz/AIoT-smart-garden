@@ -54,7 +54,7 @@ Mỗi task dùng nhánh ngắn, ví dụ feat/A-W1-01-simulator. PR nhỏ, ghi m
 
 Task Done khi: đạt tiêu chí đã chốt; có bằng chứng; người khác kiểm tra; tích hợp không làm hỏng luồng đang có; tài liệu liên quan được cập nhật; PR đã merge hoặc đầu ra phi mã nguồn được chấp nhận. Không đánh dấu Done chỉ vì đã mở PR.
 
-Thay MQTT/API cần A/B/C liên quan cùng xem. Không merge thay đổi giao tiếp một phía. Dữ liệu mô phỏng phải được phân biệt với số liệu đo thật. Không commit mật khẩu, token, Wi-Fi thật, thư mục môi trường, model/dataset lớn vào Git thông thường; ghi đường dẫn, phiên bản và cách lấy artifact theo thỏa thuận nhóm.
+Thay MQTT/API cần các thành viên liên quan (Thành, Tài, Toản) cùng xem. Không merge thay đổi giao tiếp một phía. Dữ liệu mô phỏng phải được phân biệt với số liệu đo thật. Không commit mật khẩu, token, Wi-Fi thật, thư mục môi trường, model/dataset lớn vào Git thông thường; ghi đường dẫn, phiên bản và cách lấy artifact theo thỏa thuận nhóm.
 
 ## 5. Nhịp phối hợp
 

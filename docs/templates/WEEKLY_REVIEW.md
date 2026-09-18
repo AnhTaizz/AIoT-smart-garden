@@ -1,6 +1,6 @@
 # Nghiệm thu tuần [số tuần]
 
-Ngày: [điền]. Milestone: [M1–M7]. Người tham gia: [A/B/C theo tên thật]. Commit/phiên bản demo: [điền]. Môi trường: [thiết bị, cấu hình, mạng, dữ liệu thật/mô phỏng].
+Ngày: [điền]. Milestone: [M1–M7]. Người tham gia: [Thành / Tài / Toản]. Commit/phiên bản demo: [điền]. Môi trường: [thiết bị, cấu hình, mạng, dữ liệu thật/mô phỏng].
 
 ## Mục tiêu và kết quả
 
@@ -26,6 +26,6 @@ Trạng thái: PASS / CHƯA ĐẠT. Người kiểm tra: [điền]. Căn cứ: [
 
 ## Kế hoạch tuần tới
 
-Mục tiêu demo: [điền]. Giờ rảnh A/B/C: [điền]. Task ưu tiên: [điền]. Ai cần hỗ trợ: [điền]. Phạm vi thay đổi nếu có và người thống nhất: [điền].
+Mục tiêu demo: [điền]. Giờ rảnh của Thành / Tài / Toản: [điền]. Task ưu tiên: [điền]. Ai cần hỗ trợ: [điền]. Phạm vi thay đổi nếu có và người thống nhất: [điền].
 
 Mỗi người cập nhật phần báo cáo liên quan. Người điều phối tóm tắt kết quả và quyết định vào PROJECT_STATE.

@@ -6,9 +6,9 @@ Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, Fast
 
 ## Bắt đầu từ đâu?
 
-1. Đọc [phân công nhóm](docs/TEAM.md), điền tên/GitHub username cho A, B, C và thống nhất người điều phối.
+1. Đọc [phân công nhóm](docs/TEAM.md), cập nhật GitHub username cho Thành (Embedded), Tài (Backend), Toản (Frontend-AI) và thống nhất người điều phối.
 2. Chốt G01–G03 ở [kế hoạch 7 tuần](docs/ROADMAP.md): phạm vi, giao tiếp và phần cứng.
-3. Mỗi người mở file của mình: [A — Thiết bị](docs/assignments/A-EMBEDDED.md), [B — Backend](docs/assignments/B-BACKEND.md), [C — Frontend và AI](docs/assignments/C-FRONTEND-AI.md).
+3. Mỗi người mở file của mình: [Thành — Thiết bị và firmware (Embedded)](docs/assignments/A-EMBEDDED.md), [Tài — Backend và dữ liệu](docs/assignments/B-BACKEND.md), [Toản — Frontend và AI](docs/assignments/C-FRONTEND-AI.md).
 4. Dùng [quy trình làm việc](docs/WORKFLOW.md) để chuyển task tuần 1 thành GitHub Issues, nhận người phụ trách và kiểm tra.
 5. Theo dõi mốc chung trong [trạng thái dự án](docs/PROJECT_STATE.md). Không đánh dấu hoàn thành khi chưa demo được.
 
@@ -40,9 +40,9 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | --- | --- |
 | [TEAM](docs/TEAM.md) | Ai chịu trách nhiệm, phối hợp và bàn giao gì |
 | [ROADMAP](docs/ROADMAP.md) | Phase, milestone, lịch 7 tuần và task chung |
-| [A-EMBEDDED](docs/assignments/A-EMBEDDED.md) | 14 task của người A |
-| [B-BACKEND](docs/assignments/B-BACKEND.md) | 14 task của người B |
-| [C-FRONTEND-AI](docs/assignments/C-FRONTEND-AI.md) | 14 task của người C |
+| [A-EMBEDDED](docs/assignments/A-EMBEDDED.md) | 14 task của Thành (Thiết bị và firmware / Embedded) |
+| [B-BACKEND](docs/assignments/B-BACKEND.md) | 14 task của Tài (Backend và dữ liệu) |
+| [C-FRONTEND-AI](docs/assignments/C-FRONTEND-AI.md) | 14 task của Toản (Frontend và AI) |
 | [INTERFACES](docs/INTERFACES.md) | Những thỏa thuận giao tiếp cần chốt trước tích hợp |
 | [WORKFLOW](docs/WORKFLOW.md) | Task, review, Git, GitHub và xử lý chậm tiến độ |
 | [PROJECT_STATE](docs/PROJECT_STATE.md) | Trạng thái thực tế và việc tiếp theo |

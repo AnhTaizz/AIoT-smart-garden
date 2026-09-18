@@ -1,11 +1,11 @@
 # Trạng thái dự án
 
-Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi chuyển project lên root repo và chốt hướng LOCAL MOBILE DEMO. Trạng thái dưới đây chỉ ghi PASS khi đã có bằng chứng; PASS của bootstrap không đồng nghĩa milestone M1 đã hoàn thành.
+Cập nhật: 2026-09-18 trên nhánh `chore/local-mobile-demo-plan`, sau khi chuyển project lên root repo và chốt hướng LOCAL MOBILE DEMO. Trạng thái dưới đây chỉ ghi PASS khi đã có bằng chứng; PASS của bootstrap không đồng nghĩa milestone M1 đã hoàn thành.
 
 ## Hiện trạng đã biết
 
 - Nhóm: 3 người; thời gian: 7 tuần.
-- Vai trò A/B/C: đề xuất, chưa gắn tên.
+- Thành viên và vai trò: Thành (A — Thiết bị & firmware / Embedded), Tài (B — Backend & dữ liệu), Toản (C — Frontend & AI).
 - Repo URL: `https://github.com/AnhTaizz/AIoT-smart-garden.git`.
 - Bootstrap đã có trên `origin/main` tại commit `b6d182f`; thay đổi định hướng/migration hiện ở nhánh `chore/local-mobile-demo-plan`.
 - Project đã được chuyển từ thư mục kế hoạch lồng lên root repo; `backend/`, `frontend/`, `firmware/`, `simulator/`, `ai/`, `infra/`, `docs/` và `compose.yaml` nằm trực tiếp ở root.
@@ -18,7 +18,7 @@ Cập nhật: 2026-09-13 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 - PostgreSQL host port `5432` bị lỗi port forwarding trên máy kiểm tra; phiên kiểm tra thành công dùng `POSTGRES_PORT=55432`. Đây là cấu hình local, không đổi cổng nội bộ container.
 - Sau migration, development và LAN demo mode đều đã chạy lại từ root repo; bốn container healthy và health/readiness trực tiếp lẫn qua proxy đều PASS. Stack sau đó được dừng bằng `docker compose stop`, nên container vẫn còn để mở lại trong Docker Desktop và named volume vẫn được giữ.
 - Chưa có backend MQTT subscriber, telemetry storage/API/UI hoặc command hai chiều.
-- Bộ Markdown phân công đã soạn; vẫn chờ nhóm điền danh tính và chốt G01–G03.
+- Phân công vai trò A/B/C đã gắn tên (Thành, Tài, Toản); tiếp tục chốt GitHub username, lịch và G01–G03.
 
 ## Kết quả bootstrap hiện tại
 
@@ -71,14 +71,14 @@ Vì chưa có điều kiện nào đủ để chứng minh cả hai chiều tron
 | Nội dung | Người chủ trì | Hạn tương đối |
 | --- | --- | --- |
 | Tên/username, người điều phối, giờ rảnh và ngày bắt đầu | Cả nhóm | G01 |
-| Cây trồng, BOM, người mua và ngày nhận | A | Tuần 1 |
-| MQTT/API và quy tắc điều khiển | B cùng A/C | G02 |
+| Cây trồng, BOM, người mua và ngày nhận | Thành (A) | Tuần 1 |
+| MQTT/API và quy tắc điều khiển | Tài (B) cùng Thành/Toản | G02 |
 | Wi-Fi/hotspot demo, IP LAN ổn định và firewall private | Cả nhóm | Trước nghiệm thu M1 |
-| Nhãn, dataset, bài toán ML khả thi | C cùng A/B | Cuối tuần 3 |
+| Nhãn, dataset, bài toán ML khả thi | Toản (C) cùng Thành/Tài | Cuối tuần 3 |
 
 ## Việc tiếp theo
 
-Trước khi coding, cả nhóm điền TEAM và xác nhận G02 trong `INTERFACES.md`; A tiếp tục chủ trì G03 song song.
+Trước khi coding, cả nhóm hoàn thiện thông tin trong `docs/TEAM.md` (Thành - A, Tài - B, Toản - C) và xác nhận G02 trong `INTERFACES.md`; Thành (A) tiếp tục chủ trì G03 song song.
 
 **Task coding tiếp theo duy nhất:** B-W1-01 — thêm backend MQTT subscriber, migration/bảng telemetry và lưu hợp lệ payload từ simulator vào PostgreSQL. Chưa gộp latest/history API, command hoặc UI vào task này.
 
@@ -89,3 +89,4 @@ Trước khi coding, cả nhóm điền TEAM và xác nhận G02 trong `INTERFAC
 - 2026-09-13: chuyển project lên root repo và chốt LOCAL MOBILE DEMO; public Internet deployment thành optional, Weather API ngoài core scope, AI đứng sau luồng IoT end-to-end. Không thay đổi trạng thái nghiệm thu M1–M7.
 - 2026-09-13: tách LAN demo sang `compose.lan.yaml`; development mode trở lại localhost-only. Chưa nâng trạng thái milestone vì chưa kiểm tra smartphone/ESP32 thật.
 - 2026-09-13: thống nhất checklist M1 hai chiều từ simulator tới smartphone và ngược lại; toàn bộ tiêu chí M1 vẫn chưa nghiệm thu theo bằng chứng hiện có.
+- 2026-09-18: cập nhật phân công nhân sự chính thức: Thành (A — Thiết bị & firmware / Embedded), Tài (B — Backend & dữ liệu), Toản (C — Frontend & AI) trên toàn bộ tài liệu dự án.

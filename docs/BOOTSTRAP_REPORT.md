@@ -232,9 +232,9 @@ Các cảnh báo readiness khi PostgreSQL bị dừng và log shutdown database 
 
 ### Việc tiếp theo theo vai trò
 
-- A: cùng B/C chốt G02, giữ simulator tương thích contract đã chốt, rồi làm nhận command và ACK/state; A chủ trì BOM/phần cứng G03.
-- B: thêm MQTT subscriber, validate/lưu telemetry, migration và API đọc dữ liệu; sau đó triển khai vòng đời command đúng contract.
-- C: nối dashboard vào telemetry API thật và chỉ bật điều khiển sau khi command/ACK đã chạy; tiếp tục chuẩn bị bài toán/dữ liệu AI theo roadmap.
+- Thành (A): cùng Tài (B) và Toản (C) chốt G02, giữ simulator tương thích contract đã chốt, rồi làm nhận command và ACK/state; Thành chủ trì BOM/phần cứng G03.
+- Tài (B): thêm MQTT subscriber, validate/lưu telemetry, migration và API đọc dữ liệu; sau đó triển khai vòng đời command đúng contract.
+- Toản (C): nối dashboard vào telemetry API thật và chỉ bật điều khiển sau khi command/ACK đã chạy; tiếp tục chuẩn bị bài toán/dữ liệu AI theo roadmap.
 - Cả nhóm: điền TEAM/G01, tạo Issues tuần 1 và nghiệm thu lại toàn luồng. M1 **CHƯA ĐẠT/CHƯA NGHIỆM THU** vì chưa có `MQTT → DB → API → UI` và command hai chiều.
 
 Không commit, push hoặc merge trong TASK-000E.

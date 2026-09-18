@@ -1,6 +1,6 @@
 # Thỏa thuận giao tiếp — Bản nháp cho G02
 
-Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. B chủ trì, A/C cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR.
+Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. Tài (B) chủ trì, Thành (A) và Toản (C) cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR.
 
 ## Ranh giới xử lý
 
@@ -20,7 +20,7 @@ Hai luồng phải chạy trên cùng phiên bản và cùng `device_id`. Kiểm
 
 ## MQTT cho M1
 
-Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống nhất trong M1, còn chi tiết payload phải được A/B/C xác nhận ở G02:
+Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống nhất trong M1, còn chi tiết payload phải được cả 3 thành viên (Thành, Tài, Toản) xác nhận ở G02:
 
 | Luồng | Topic M1 | Nội dung tối thiểu cần xác nhận |
 | --- | --- | --- |
@@ -82,8 +82,8 @@ Tuần 1 dùng polling đơn giản hoặc cơ chế nhóm quen thuộc; chốt 
 
 ## Hợp đồng model — chốt ở tuần 3–4
 
-C bàn giao B: artifact model, preprocessing, danh sách nhãn, inference mẫu, phiên bản dataset/model, dependency, kích thước ảnh và lỗi đầu vào. B trả kết quả gắn image_id và model_version. HSV trả độ phủ xanh riêng; model phân loại trả nhãn/điểm mô hình riêng. Không tự gọi điểm mô hình là xác suất đã hiệu chuẩn.
+Toản (C) bàn giao Tài (B): artifact model, preprocessing, danh sách nhãn, inference mẫu, phiên bản dataset/model, dependency, kích thước ảnh và lỗi đầu vào. Tài trả kết quả gắn image_id và model_version. HSV trả độ phủ xanh riêng; model phân loại trả nhãn/điểm mô hình riêng. Không tự gọi điểm mô hình là xác suất đã hiệu chuẩn.
 
 ## Xác nhận
 
-A: chưa xác nhận. B: chưa xác nhận. C: chưa xác nhận. Link PR thống nhất: chưa có.
+Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: chưa có.

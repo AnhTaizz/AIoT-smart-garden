@@ -575,4 +575,4 @@ G02 AGREED là điều kiện đi trước và **không** đồng nghĩa M1 PASS
 
 ## Xác nhận
 
-Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: chưa có.
+Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2).

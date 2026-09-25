@@ -1,6 +1,6 @@
 # Thành — Thiết bị và firmware (Embedded)
 
-Phụ trách: **Thành** (A). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B). Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Tất cả task hiện **Backlog**, chưa có bằng chứng thực hiện.
+Phụ trách: **Thành** (A). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B). Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
 Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
 
@@ -17,8 +17,8 @@ Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát 
 - **Đầu ra:** `simulator/`, payload telemetry theo G02 và hướng dẫn phát bản tin.
 - **Tiêu chí nghiệm thu:** Phát được ít nhất 10 bản tin hợp lệ có `device_id` và sequence; B-W1-01 lưu được chúng vào PostgreSQL; dữ liệu `simulated` được ghi rõ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog — bootstrap publish đã có, nhưng task theo contract G02 và lưu DB end-to-end chưa bắt đầu.
-- **Issue / PR / bằng chứng:** `docs/BOOTSTRAP_REPORT.md` mới chứng minh publish và `mosquitto_sub` CLI riêng lẻ, chưa có backend subscriber.
+- **Trạng thái:** Review/Test — simulator `telemetry-v1` và luồng lưu backend đã có trên nhánh G02; chờ Thành review contract và PR.
+- **Issue / PR / bằng chứng:** 2026-09-25, unit test simulator 29/29; phiên simulator thật gửi 7 telemetry `simulated: true` qua MQTT và đọc lại từ REST/PostgreSQL. Đây là bằng chứng phần mềm, không phải nghiệm thu phần cứng/M1.
 
 ### A-W1-02 — Simulator nhận command và báo trạng thái
 
@@ -27,8 +27,8 @@ Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát 
 - **Đầu ra:** Subscribe `garden/node_01/control`; xử lý `command_id`; publish ACK và state trên hai topic tương ứng.
 - **Tiêu chí nghiệm thu:** Simulator nhận command, giữ nguyên `command_id`, gửi ACK `applied` hoặc `rejected` và state có `last_command_id`; lệnh trùng không khởi động lại bộ đếm; backend/UI quan sát đúng kết quả.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Review/Test — implementation tham chiếu đã có trên nhánh G02; chờ Thành review và G02 AGREED.
+- **Issue / PR / bằng chứng:** 2026-09-25, simulator thật nhận `pump_on` từ backend, trả ACK/state để command thành `applied`, bằng chứng relay `on` được giữ và state hiện tại tự về `off` sau 2 giây. Unit test có expiry, clock unsynced, duplicate, busy, STOP ordering và boot mismatch; chưa kiểm tra ESP32/UI/smartphone.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 

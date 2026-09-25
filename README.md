@@ -172,7 +172,7 @@ python -m pip install -r .\requirements.txt
 python .\simulator.py --count 10 --interval 1
 ```
 
-Payload luôn có `simulated: true` và schema `bootstrap-telemetry-v0`. Đây là đề xuất bootstrap trong khi `INTERFACES.md` còn DRAFT, không phải số đo thật hoặc contract G02 đã chốt. Cách cấu hình broker/xác thực/topic và lệnh subscriber xác nhận 10 bản tin nằm trong `simulator/README.md`.
+Payload luôn có `simulated: true` và schema `telemetry-v1`. Simulator cũng subscribe command, gửi ACK/state và tự dừng bơm mô phỏng theo bản đề xuất G02. `INTERFACES.md` vẫn là DRAFT chờ cả nhóm xác nhận; dữ liệu simulator không phải số đo thật và không thay nghiệm thu ESP32/bơm. Cấu hình và cách kiểm tra nằm trong `simulator/README.md`.
 
 ## Dừng môi trường
 

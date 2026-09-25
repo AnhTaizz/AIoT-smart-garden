@@ -84,6 +84,57 @@ Tuần 1 dùng polling đơn giản hoặc cơ chế nhóm quen thuộc; chốt 
 
 Toản (C) bàn giao Tài (B): artifact model, preprocessing, danh sách nhãn, inference mẫu, phiên bản dataset/model, dependency, kích thước ảnh và lỗi đầu vào. Tài trả kết quả gắn image_id và model_version. HSV trả độ phủ xanh riêng; model phân loại trả nhãn/điểm mô hình riêng. Không tự gọi điểm mô hình là xác suất đã hiệu chuẩn.
 
+## Đề xuất triển khai của Tài (B) — chờ G02
+
+Backend B-W1-01/B-W1-02 đã chạy theo các payload dưới đây để có thứ cụ thể mang ra G02. Đây **vẫn là DRAFT**: Thành (A) và Toản (C) xem, đề xuất sửa; mọi thay đổi cập nhật cả mục này lẫn backend trong cùng PR. Thời gian dùng ISO 8601 có múi giờ (backend gửi UTC dạng `...Z`). Topic dạng `garden/<device_id>/<kind>`, `device_id` chỉ gồm `A–Z a–z 0–9 _ -` (≤ 64 ký tự) và phải trùng với `device_id` trong payload.
+
+| Topic | Hướng | QoS | Retained |
+| --- | --- | --- | --- |
+| `garden/<id>/telemetry` | thiết bị → backend | 0 | không |
+| `garden/<id>/control` | backend → thiết bị | 1 | **không** (tránh replay lệnh bật bơm) |
+| `garden/<id>/ack` | thiết bị → backend | 1 | không |
+| `garden/<id>/state` | thiết bị → backend | 1 | không |
+
+**Telemetry** (hiện trùng payload simulator bootstrap). Bắt buộc có đủ khóa; giá trị cảm biến được phép `null` khi sensor lỗi. Trường thêm (ví dụ `sensor_status`, `mode`, `relay_state`) được giữ trong `raw_payload`, chưa tách cột.
+
+```json
+{"schema":"bootstrap-telemetry-v0","simulated":true,"device_id":"node_01","sequence":7,
+ "measured_at":"2026-09-18T10:00:00.000Z","temperature_c":27.5,"air_humidity_pct":60.1,"soil_moisture_pct":42.0}
+```
+
+Ví dụ bị từ chối (vào `rejected_message`, không vào `telemetry`): `{not json`; `"sequence":"7"`; `"air_humidity_pct":250`; `"temperature_c":NaN`; `"measured_at":"2026-09-18T10:00:00"` (thiếu múi giờ); payload `device_id` khác topic.
+
+**Control** (backend gửi). `pump_on` bắt buộc `duration_seconds`; `pump_off` không có tham số.
+
+```json
+{"command_id":"253b7b9c-aafe-4fdd-bc95-ae55b3d41068","device_id":"node_01","action":"pump_on",
+ "params":{"duration_seconds":10},"issued_at":"2026-09-18T16:54:09.608Z","expires_at":"2026-09-18T16:54:24.608Z"}
+```
+
+**ACK** — `status` ∈ `accepted` | `rejected` | `applied`; `reason` (≤ 200 ký tự) nên có khi `rejected`; `acked_at` tùy chọn.
+
+```json
+{"command_id":"253b7b9c-aafe-4fdd-bc95-ae55b3d41068","device_id":"node_01","status":"applied"}
+{"command_id":"...","device_id":"node_01","status":"rejected","reason":"sensor_error"}
+```
+
+**State** — mọi trường trừ `device_id` là tùy chọn; `last_command_id` là UUID của command vừa áp dụng.
+
+```json
+{"device_id":"node_01","mode":"MANUAL","relay_state":"on","last_command_id":"253b7b9c-aafe-4fdd-bc95-ae55b3d41068",
+ "reported_at":"2026-09-18T16:54:10.000Z"}
+```
+
+Quy tắc backend đang áp dụng (cần G02 xác nhận):
+
+- Command `pending` cho tới khi có ACK cuối. `accepted` giữ `pending`; `applied` → `applied`; `rejected` → `rejected` (giữ `reason`).
+- Hạn ACK mặc định 15 giây (`COMMAND_TIMEOUT_SECONDS`); quá hạn → `timeout`. ACK tới sau hạn được lưu `late_ack`/`late_ack_at` nhưng **không** đổi `timeout` thành `applied`.
+- ACK có `device_id` khác command bị bỏ qua (ghi `ack_device_mismatch`). ACK tới khi command đã `applied`/`rejected` chỉ được ghi log sự kiện.
+- State có `last_command_id` khớp đặt `state_confirmed_at`; bản thân state không chuyển command sang `applied`.
+- `/latest` báo `stale: true` khi bản ghi mới nhất (theo thời điểm server nhận) cũ hơn 30 giây (`TELEMETRY_STALE_SECONDS`).
+
+Câu hỏi mở cho G02: thiết bị có kiểm tra `expires_at` khi đồng hồ chưa đồng bộ không; có cần `applied` bắt buộc đi kèm state khớp mới tính thành công; khử trùng telemetry theo `boot_id` + `sequence`; tên/giá trị chuẩn cho `mode`, `relay_state`, `sensor_status`.
+
 ## Xác nhận
 
 Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: chưa có.

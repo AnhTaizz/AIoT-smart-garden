@@ -17,7 +17,7 @@ Cập nhật: 2026-09-18 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 - Compose, bốn container, backend, frontend build/test và simulator publish 10 bản tin đã được kiểm tra trong môi trường development; bằng chứng bootstrap tóm tắt ở `docs/BOOTSTRAP_REPORT.md`.
 - PostgreSQL host port `5432` bị lỗi port forwarding trên máy kiểm tra; phiên kiểm tra thành công dùng `POSTGRES_PORT=55432`. Đây là cấu hình local, không đổi cổng nội bộ container.
 - Sau migration, development và LAN demo mode đều đã chạy lại từ root repo; bốn container healthy và health/readiness trực tiếp lẫn qua proxy đều PASS. Stack sau đó được dừng bằng `docker compose stop`, nên container vẫn còn để mở lại trong Docker Desktop và named volume vẫn được giữ.
-- Chưa có backend MQTT subscriber, telemetry storage/API/UI hoặc command hai chiều.
+- Backend (nhánh `feat/B-W1-backend-telemetry-command`, chờ review): có MQTT subscriber → PostgreSQL, latest/history API và vòng đời command `pending/applied/rejected/timeout`; đã kiểm tra với simulator publish thật và `mosquitto_pub` đóng vai thiết bị. Chưa có UI telemetry/command và simulator nhận command.
 - Phân công vai trò A/B/C đã gắn tên (Thành, Tài, Toản); tiếp tục chốt GitHub username, lịch và G01–G03.
 
 ## Kết quả bootstrap hiện tại
@@ -53,15 +53,15 @@ Cập nhật: 2026-09-18 trên nhánh `chore/local-mobile-demo-plan`, sau khi ch
 
 | Điều kiện bắt buộc | Trạng thái thực tế |
 | --- | --- |
-| Simulator telemetry → MQTT → backend subscriber → PostgreSQL | CHƯA ĐẠT — simulator publish được, nhưng chưa có subscriber/storage |
-| Latest REST API | CHƯA CÓ |
-| History REST API | CHƯA CÓ |
+| Simulator telemetry → MQTT → backend subscriber → PostgreSQL | PASS thành phần — 10 bản tin simulator lưu đúng `node_01`/sequence 1–10 (chưa merge) |
+| Latest REST API | PASS thành phần — `GET /devices/{id}/latest` đọc PostgreSQL, có `stale` (chưa merge) |
+| History REST API | PASS thành phần — `GET /devices/{id}/telemetry` (chưa merge) |
 | React hiển thị telemetry thật từ API | CHƯA CÓ — dashboard hiện chỉ có trạng thái health/readiness |
 | Smartphone mở dashboard qua LAN | CHƯA KIỂM TRA trên điện thoại thật |
-| Command có `command_id` | CHƯA CÓ |
+| Command có `command_id` | PASS thành phần — `POST /devices/{id}/commands` publish lên `garden/<id>/control` (chưa merge) |
 | Simulator nhận MQTT command | CHƯA CÓ |
 | Simulator gửi ACK và state | CHƯA CÓ |
-| Backend phân biệt `pending/applied/rejected/timeout` | CHƯA CÓ |
+| Backend phân biệt `pending/applied/rejected/timeout` | PASS thành phần — e2e với ACK giả lập bằng MQTT client; chưa với simulator thật |
 | UI không báo thành công chỉ vì HTTP 2xx | CHƯA CÓ luồng command để nghiệm thu |
 
 Vì chưa có điều kiện nào đủ để chứng minh cả hai chiều trong một phiên end-to-end, M1 giữ trạng thái **Chưa nghiệm thu**. Các mục PASS trong bảng bootstrap chỉ là bằng chứng thành phần.
@@ -80,7 +80,7 @@ Vì chưa có điều kiện nào đủ để chứng minh cả hai chiều tron
 
 Trước khi coding, cả nhóm hoàn thiện thông tin trong `docs/TEAM.md` (Thành - A, Tài - B, Toản - C) và xác nhận G02 trong `INTERFACES.md`; Thành (A) tiếp tục chủ trì G03 song song.
 
-**Task coding tiếp theo duy nhất:** B-W1-01 — thêm backend MQTT subscriber, migration/bảng telemetry và lưu hợp lệ payload từ simulator vào PostgreSQL. Chưa gộp latest/history API, command hoặc UI vào task này.
+**Task coding tiếp theo:** Toản review B-W1-01/B-W1-02; A-W1-02 (simulator nhận command, gửi ACK/state theo đề xuất trong INTERFACES) và C-W1 (UI telemetry/command) dùng API backend đã có. Sau đó chạy phiên end-to-end M1 với smartphone qua LAN.
 
 ## Nhật ký thay đổi
 
@@ -90,3 +90,4 @@ Trước khi coding, cả nhóm hoàn thiện thông tin trong `docs/TEAM.md` (T
 - 2026-09-13: tách LAN demo sang `compose.lan.yaml`; development mode trở lại localhost-only. Chưa nâng trạng thái milestone vì chưa kiểm tra smartphone/ESP32 thật.
 - 2026-09-13: thống nhất checklist M1 hai chiều từ simulator tới smartphone và ngược lại; toàn bộ tiêu chí M1 vẫn chưa nghiệm thu theo bằng chứng hiện có.
 - 2026-09-18: cập nhật phân công nhân sự chính thức: Thành (A — Thiết bị & firmware / Embedded), Tài (B — Backend & dữ liệu), Toản (C — Frontend & AI) trên toàn bộ tài liệu dự án.
+- 2026-09-18: Tài hoàn thành phần code B-W1-01/B-W1-02 (MQTT subscriber, migration, latest/history API, command lifecycle) trên nhánh riêng; unit + e2e test PASS trong development. M1 vẫn chưa nghiệm thu: chờ review, G02, simulator nhận command, UI và smartphone.

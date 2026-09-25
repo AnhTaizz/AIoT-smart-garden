@@ -93,6 +93,107 @@ def test_state_before_ack_is_also_valid_evidence(device):
     assert applied["confirmed_relay_state"] == "on"
 
 
+def test_applied_ack_cannot_be_downgraded_by_repeated_accepted(device):
+    device.announce()
+    command = device.create_command(duration=5)
+    control = device.next_control(command["command_id"])
+    device.publish_ack(command["command_id"], "applied")
+    device.wait_for_ack(command["command_id"], "applied")
+
+    device.publish_ack(command["command_id"], "accepted")
+    wait_for(lambda: _ack_event_count(command["command_id"], "accepted") == 1)
+    assert device.command(command["command_id"])["device_ack"] == "applied"
+
+    device.publish_state(
+        relay_state="on",
+        last_command_id=command["command_id"],
+        last_command_sequence=control["command_sequence"],
+    )
+    assert device.wait_status(command["command_id"], "applied", timeout=5)[
+        "status"
+    ] == "applied"
+
+
+def test_repeated_accepted_before_applied_is_monotonic(device):
+    device.announce()
+    command = device.create_command(duration=5)
+    control = device.next_control(command["command_id"])
+
+    for _ in range(3):
+        device.publish_ack(command["command_id"], "accepted")
+    wait_for(lambda: _ack_event_count(command["command_id"], "accepted") == 3)
+    assert device.command(command["command_id"])["device_ack"] == "accepted"
+
+    device.publish_ack(command["command_id"], "applied")
+    device.publish_state(
+        relay_state="on",
+        last_command_id=command["command_id"],
+        last_command_sequence=control["command_sequence"],
+    )
+    assert device.wait_status(command["command_id"], "applied")["status"] == "applied"
+
+
+def test_accepted_from_wrong_boot_does_not_replace_applied_evidence(device):
+    device.announce()
+    command = device.create_command(duration=5)
+    control = device.next_control(command["command_id"])
+    device.publish_ack(command["command_id"], "applied")
+    device.wait_for_ack(command["command_id"], "applied")
+
+    device.publish_ack(
+        command["command_id"], "accepted", boot_id="boot_wrong_but_valid"
+    )
+    wait_for(lambda: _ack_outcome_count(command["command_id"], "stale_boot") == 1)
+    unchanged = device.command(command["command_id"])
+    assert unchanged["device_ack"] == "applied"
+    assert unchanged["ack_boot_id"] == device.boot_id
+
+    device.publish_state(
+        relay_state="on",
+        last_command_id=command["command_id"],
+        last_command_sequence=control["command_sequence"],
+    )
+    assert device.wait_status(command["command_id"], "applied")["status"] == "applied"
+
+
+def test_repeated_ack_does_not_change_final_statuses(device):
+    device.announce()
+
+    applied = device.create_command(duration=5)
+    applied_control = device.next_control(applied["command_id"])
+    device.publish_ack(applied["command_id"], "applied")
+    device.publish_state(
+        relay_state="on",
+        last_command_id=applied["command_id"],
+        last_command_sequence=applied_control["command_sequence"],
+    )
+    device.wait_status(applied["command_id"], "applied")
+    device.publish_ack(applied["command_id"], "accepted")
+
+    rejected = device.create_command(action="pump_off", duration=None)
+    device.next_control(rejected["command_id"])
+    device.publish_ack(rejected["command_id"], "rejected", reason="relay_error")
+    device.wait_status(rejected["command_id"], "rejected")
+    device.publish_ack(rejected["command_id"], "accepted")
+
+    timed_out = device.create_command(action="pump_off", duration=None)
+    device.next_control(timed_out["command_id"])
+    with db_connection() as conn:
+        conn.execute(
+            "UPDATE command SET status = 'timeout', finalized_at = expires_at"
+            " WHERE command_id = %s",
+            (timed_out["command_id"],),
+        )
+    device.publish_ack(timed_out["command_id"], "accepted")
+
+    wait_for(lambda: _ack_event_count(applied["command_id"], "accepted") == 1)
+    wait_for(lambda: _ack_event_count(rejected["command_id"], "accepted") == 1)
+    wait_for(lambda: _ack_event_count(timed_out["command_id"], "accepted") == 1)
+    assert device.command(applied["command_id"])["status"] == "applied"
+    assert device.command(rejected["command_id"])["status"] == "rejected"
+    assert device.command(timed_out["command_id"])["status"] == "timeout"
+
+
 def test_pump_off_confirmed_by_relay_off_state(device):
     device.announce(relay_state="on")
     command = device.create_command(action="pump_off", duration=None)
@@ -350,6 +451,24 @@ def _reasons(device_id):
                 (f"garden/{device_id}/telemetry",),
             ).fetchall()
         ]
+
+
+def _ack_event_count(command_id, ack_status):
+    with db_connection() as conn:
+        return conn.execute(
+            "SELECT count(*) FROM command_event WHERE command_id = %s"
+            " AND kind = 'ack' AND ack_status = %s",
+            (command_id, ack_status),
+        ).fetchone()[0]
+
+
+def _ack_outcome_count(command_id, outcome):
+    with db_connection() as conn:
+        return conn.execute(
+            "SELECT count(*) FROM command_event WHERE command_id = %s"
+            " AND kind = 'ack' AND outcome = %s",
+            (command_id, outcome),
+        ).fetchone()[0]
 
 
 # --- REST shape ------------------------------------------------------------

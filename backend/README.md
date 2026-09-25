@@ -57,6 +57,8 @@ POST → pending ──ACK accepted──▶ pending
 
 - Bằng chứng lưu theo từng command (`state_confirmed_at`, `confirmed_relay_state`, `confirmed_state_sequence`, `confirmed_boot_id`), tách khỏi state mới nhất của thiết bị. Lệnh ON 5 giây vẫn `applied` sau khi bơm tự tắt, còn `/state` hiển thị `off`.
 - Chỉ nhận state `off` mà chưa có bằng chứng `on` thì `pump_on` **không** được coi là `applied`.
+- Bằng chứng thứ hai chỉ chốt `applied` khi xử lý trước `expires_at`; tại hoặc sau hạn, transaction chuyển command sang `timeout` và vẫn giữ bằng chứng muộn. Quy tắc không phụ thuộc sweeper/GET.
+- ACK tiến triển đơn điệu: `accepted` lặp không ghi đè một ACK `applied` đã lưu.
 - `command_sequence` cấp nguyên tử trên bảng `device_command_counter` nên không lùi khi backend restart; thiết bị dùng nó làm mốc thứ tự để một ON cũ không chạy sau một OFF mới hơn.
 - `pump_on` mang `target_boot_id`; ACK/state từ boot khác bị ghi nhận là cũ và không đổi trạng thái. `pump_off` không gắn boot nên vẫn dùng được sau reboot.
 - State của boot đã bị thay thế không làm state hiện tại quay lại boot cũ; state có `state_sequence` nhỏ hơn bị bỏ qua khi cập nhật state hiện tại.

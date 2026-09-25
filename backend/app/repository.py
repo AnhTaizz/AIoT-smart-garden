@@ -203,7 +203,7 @@ async def expire_commands(
     """Move pending commands past their deadline to `timeout`."""
     cursor = await conn.execute(
         "UPDATE command SET status = 'timeout', finalized_at = expires_at"
-        " WHERE status = 'pending' AND expires_at < now()"
+        " WHERE status = 'pending' AND expires_at <= clock_timestamp()"
         " AND (%s::uuid IS NULL OR command_id = %s)"
         " RETURNING command_id",
         (command_id, command_id),
@@ -259,27 +259,42 @@ async def _log_event(
     )
 
 
-async def _finalize_if_confirmed(conn: AsyncConnection, command: dict[str, Any]) -> bool:
-    """Set `applied` when ACK and state evidence agree on the same boot."""
+async def _finalize_if_confirmed(conn: AsyncConnection, command: dict[str, Any]) -> str:
+    """Finalize atomically without allowing evidence after the deadline."""
     if command["status"] != "pending":
-        return False
+        return command["status"]
     if command["device_ack"] != "applied" or command["state_confirmed_at"] is None:
-        return False
+        return "pending"
     if command["ack_boot_id"] != command["confirmed_boot_id"]:
-        return False
-    await conn.execute(
+        return "pending"
+    cursor = await conn.execute(
         "UPDATE command SET status = 'applied', finalized_at = now()"
-        " WHERE command_id = %s AND status = 'pending'",
+        " WHERE command_id = %s AND status = 'pending'"
+        " AND expires_at > clock_timestamp()"
+        " AND device_ack = 'applied' AND state_confirmed_at IS NOT NULL"
+        " AND ack_boot_id = confirmed_boot_id RETURNING status",
         (command["command_id"],),
     )
-    return True
+    if await cursor.fetchone() is not None:
+        return "applied"
+
+    # The row is locked by the caller. A failed applied UPDATE may mean the
+    # deadline elapsed while this transaction was processing the second proof.
+    cursor = await conn.execute(
+        "UPDATE command SET status = 'timeout', finalized_at = expires_at"
+        " WHERE command_id = %s AND status = 'pending'"
+        " AND expires_at <= clock_timestamp() RETURNING status",
+        (command["command_id"],),
+    )
+    return "timeout" if await cursor.fetchone() is not None else "pending"
 
 
 async def apply_ack(conn: AsyncConnection, ack: AckIn, raw: dict[str, Any]) -> str:
     """Advance a command from a device ACK and return the outcome for logs."""
     async with conn.transaction():
         cursor = await conn.execute(
-            f"SELECT {COMMAND_COLUMNS}, expires_at < now() AS expired"
+            f"SELECT {COMMAND_COLUMNS},"
+            " expires_at <= clock_timestamp() AS expired"
             " FROM command WHERE command_id = %s FOR UPDATE",
             (ack.command_id,),
         )
@@ -315,12 +330,17 @@ async def apply_ack(conn: AsyncConnection, ack: AckIn, raw: dict[str, Any]) -> s
                 # nothing about the device running now.
                 outcome = "stale_boot"
             elif ack.status == "accepted":
-                await conn.execute(
-                    "UPDATE command SET device_ack = 'accepted', acked_at = now(),"
-                    " ack_boot_id = %s WHERE command_id = %s",
-                    (ack.boot_id, ack.command_id),
-                )
-                outcome = "accepted"
+                if command["device_ack"] == "applied":
+                    # ACK progress is monotonic: a repeated/late accepted ACK
+                    # cannot erase stronger applied evidence.
+                    outcome = "accepted_ignored_after_applied"
+                else:
+                    await conn.execute(
+                        "UPDATE command SET device_ack = 'accepted', acked_at = now(),"
+                        " ack_boot_id = %s WHERE command_id = %s",
+                        (ack.boot_id, ack.command_id),
+                    )
+                    outcome = "accepted"
             elif ack.status == "rejected":
                 await conn.execute(
                     "UPDATE command SET status = 'rejected', device_ack = 'rejected',"
@@ -341,8 +361,14 @@ async def apply_ack(conn: AsyncConnection, ack: AckIn, raw: dict[str, Any]) -> s
                     (ack.boot_id, ack.command_id),
                 )
                 command = {**command, "device_ack": "applied", "ack_boot_id": ack.boot_id}
-                confirmed = await _finalize_if_confirmed(conn, command)
-                outcome = "applied" if confirmed else "awaiting_state_evidence"
+                final_status = await _finalize_if_confirmed(conn, command)
+                if final_status == "applied":
+                    outcome = "applied"
+                elif final_status == "timeout":
+                    late = True
+                    outcome = "deadline_timeout"
+                else:
+                    outcome = "awaiting_state_evidence"
 
         await _log_event(
             conn,
@@ -473,12 +499,21 @@ async def _record_evidence(conn: AsyncConnection, state: StateIn) -> str | None:
         return None
 
     cursor = await conn.execute(
-        f"SELECT {COMMAND_COLUMNS} FROM command WHERE command_id = %s FOR UPDATE",
+        f"SELECT {COMMAND_COLUMNS},"
+        " expires_at <= clock_timestamp() AS expired"
+        " FROM command WHERE command_id = %s FOR UPDATE",
         (state.last_command_id,),
     )
     command = await cursor.fetchone()
     if command is None or command["device_id"] != state.device_id:
         return "evidence_unknown_command"
+    if command["status"] == "pending" and command["expired"]:
+        await conn.execute(
+            "UPDATE command SET status = 'timeout', finalized_at = expires_at"
+            " WHERE command_id = %s AND status = 'pending'",
+            (state.last_command_id,),
+        )
+        command = {**command, "status": "timeout"}
     if command["status"] not in ("pending", "timeout"):
         # Applied already has its proof. Rejected/publish-failed commands cannot
         # acquire proof later and are still preserved in command_event.
@@ -512,8 +547,12 @@ async def _record_evidence(conn: AsyncConnection, state: StateIn) -> str | None:
     if command["status"] == "timeout":
         # Preserve late proof on the command, but never resurrect a timeout.
         return "late_evidence_recorded"
-    confirmed = await _finalize_if_confirmed(conn, command)
-    return "evidence_applied" if confirmed else "evidence_awaiting_ack"
+    final_status = await _finalize_if_confirmed(conn, command)
+    if final_status == "applied":
+        return "evidence_applied"
+    if final_status == "timeout":
+        return "late_evidence_recorded"
+    return "evidence_awaiting_ack"
 
 
 async def get_device_state(

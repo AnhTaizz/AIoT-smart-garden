@@ -278,7 +278,7 @@ Thứ tự kiểm tra một command, dừng ở bước đầu tiên không đ�
 
 `order_mark` là mốc thứ tự chỉ tăng, lưu trong RAM của boot hiện tại: nó được nâng lên mỗi khi thiết bị áp dụng một command bất kỳ, và một OFF cũ hoặc trùng không bao giờ làm nó lùi. Nhờ vậy một ON phát trước OFF nhưng đến sau OFF sẽ bị `superseded`, không bật bơm.
 
-Sau reboot: relay về `off`, `order_mark` về 0, bộ nhớ `command_id` trống, `boot_id` mới. Thiết bị không khôi phục lệnh ON cũ. Mất MQTT thì tắt bơm (M1/M2).
+Sau reboot: relay về `off`, `order_mark` về 0, bộ nhớ `command_id` trống, `boot_id` mới. Thiết bị không khôi phục lệnh ON cũ. Khi mất MQTT, thiết bị tắt relay và hủy bộ đếm bơm ngay nhưng giữ `order_mark` cùng bộ nhớ `command_id` trong boot hiện tại. Reconnect phát state `off`; command ON trùng không được chạy lại.
 
 ### 7. Quy tắc backend
 
@@ -287,7 +287,7 @@ Sau reboot: relay về `off`, `order_mark` về 0, bộ nhớ `command_id` trố
 1. ACK `applied` có cùng `command_id` và `device_id`; với `pump_on` thì `boot_id` của ACK phải bằng `target_boot_id`.
 2. Một state có `last_command_id` bằng `command_id`, cùng `boot_id` với ACK, và `relay_state` khớp hành động: `on` cho `pump_on`, `off` cho `pump_off`.
 
-Hai bằng chứng đến theo thứ tự nào cũng được; cái đến sau chốt trạng thái `applied`. Bằng chứng được lưu **theo từng command** (`state_confirmed_at`, `confirmed_relay_state`, `confirmed_state_sequence`, `confirmed_boot_id`), tách khỏi state mới nhất của thiết bị. Nhờ vậy một lệnh ON 5 giây vẫn `applied` sau khi bơm tự tắt, trong khi `GET /devices/{id}/state` hiển thị `relay_state: "off"` hiện tại. State mới không xóa bằng chứng cũ.
+Hai bằng chứng đến theo thứ tự nào cũng được; cái đến sau chỉ chốt trạng thái `applied` khi được xử lý **trước** `expires_at`. ACK tiến triển đơn điệu: `accepted` lặp lại không được ghi đè bằng chứng `applied`. Bằng chứng được lưu **theo từng command** (`state_confirmed_at`, `confirmed_relay_state`, `confirmed_state_sequence`, `confirmed_boot_id`), tách khỏi state mới nhất của thiết bị. Nhờ vậy một lệnh ON 5 giây vẫn `applied` sau khi bơm tự tắt, trong khi `GET /devices/{id}/state` hiển thị `relay_state: "off"` hiện tại. State mới không xóa bằng chứng cũ.
 
 Chỉ nhận được state `off` mà chưa có bằng chứng `on` phù hợp thì **không** kết luận `pump_on` đã `applied`.
 
@@ -303,7 +303,7 @@ Chỉ nhận được state `off` mà chưa có bằng chứng `on` phù hợp t
 
 **Thứ tự state:** trong cùng `boot_id`, state có `state_sequence` ≤ giá trị đã lưu bị bỏ qua cho mục đích cập nhật state hiện tại.
 
-**Timeout:** chưa đủ hai bằng chứng khi quá `expires_at` thì command thành `timeout`. ACK đến sau được ghi vào `late_ack`/`late_ack_at`. State muộn khớp action/boot được giữ trong các cột `state_confirmed_*` của command; nếu state đó mới hơn thì nó vẫn cập nhật state hiện tại. Mọi ACK/state muộn còn có bản ghi `command_event` chứa `command_id`, `device_id`, `boot_id`, outcome và payload. Các bằng chứng này không đổi `timeout` thành `applied`. `timeout` **không** có nghĩa bơm đã tắt.
+**Timeout:** nếu chưa đủ hai bằng chứng tại thời điểm xử lý `>= expires_at` thì command thành `timeout`; bằng đúng `expires_at` cũng đã hết hạn. Quy tắc này được kiểm tra trong transaction nhận ACK/state và trong câu SQL chốt `applied`, không phụ thuộc sweeper hay một lần GET. ACK đến sau được ghi vào `late_ack`/`late_ack_at`. State muộn khớp action/boot được giữ trong các cột `state_confirmed_*` của command; nếu state đó mới hơn thì nó vẫn cập nhật state hiện tại. Mọi ACK/state muộn còn có bản ghi `command_event` chứa `command_id`, `device_id`, `boot_id`, outcome và payload. Các bằng chứng này không đổi `timeout` thành `applied`. `timeout` **không** có nghĩa bơm đã tắt.
 
 **Thứ tự command:** `command_sequence` cấp theo thiết bị bằng một câu UPDATE nguyên tử trên bảng `device_command_counter` trong PostgreSQL, nên không trùng và không lùi khi backend restart.
 

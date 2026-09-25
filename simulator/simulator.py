@@ -196,6 +196,9 @@ class Simulator:
             pump_max_seconds=config.pump_max_seconds,
         )
         self.lock = threading.Lock()
+        # `initial_connection` lets run() distinguish the first CONNACK from
+        # the live connection flag, which is cleared on every disconnect.
+        self.initial_connection = threading.Event()
         self.connected = threading.Event()
         self.connection_error: list[str] = []
         self.started_at = time.monotonic()
@@ -257,18 +260,48 @@ class Simulator:
     ) -> None:
         if getattr(reason_code, "is_failure", reason_code != 0):
             self.connection_error.append(str(reason_code))
-            self.connected.set()
+            self.connected.clear()
+            self.initial_connection.set()
             return
         client.subscribe(topic_for(self.config.device_id, "control"), qos=1)
         LOGGER.info(
             "Đã kết nối MQTT broker, subscribe %s",
             topic_for(self.config.device_id, "control"),
         )
-        self.connected.set()
         with self.lock:
             # A device announces its state right after connecting, so the
-            # backend learns the current boot_id before any pump_on.
+            # backend learns the current boot_id before any pump_on. Runtime
+            # memory survives reconnect, so a duplicate ON cannot replay.
+            self.connected.set()
+            self.initial_connection.set()
             self.publish_state("sau khi kết nối")
+
+    def on_disconnect(
+        self,
+        _client: Any,
+        _userdata: Any,
+        _disconnect_flags: Any,
+        reason_code: Any,
+        _props: Any,
+    ) -> None:
+        """Fail safe immediately without trying to publish on a dead link."""
+        self.connected.clear()
+        with self.lock:
+            was_running = (
+                self.runtime.relay_state == "on"
+                or self.runtime.running_command_id is not None
+                or self.runtime.pump_stop_at is not None
+            )
+            self.runtime.relay_state = "off"
+            self.runtime.running_command_id = None
+            self.runtime.pump_stop_at = None
+        if was_running:
+            LOGGER.warning(
+                "MQTT mất kết nối (%s): đã tắt relay và hủy bộ đếm bơm",
+                reason_code,
+            )
+        else:
+            LOGGER.info("MQTT mất kết nối (%s); relay vẫn off", reason_code)
 
     def on_message(self, _client: Any, _userdata: Any, message: Any) -> None:
         try:
@@ -325,7 +358,7 @@ class Simulator:
         self.client.connect(config.broker, config.port, keepalive=30)
         self.client.loop_start()
         try:
-            if not self.connected.wait(timeout=10):
+            if not self.initial_connection.wait(timeout=10):
                 raise TimeoutError("Hết thời gian chờ MQTT CONNACK")
             if self.connection_error:
                 raise ConnectionError(
@@ -336,21 +369,24 @@ class Simulator:
             next_heartbeat = time.monotonic() + config.state_heartbeat_seconds
             while True:
                 now = time.monotonic()
-                with self.lock:
-                    if self.runtime.pump_finished(now):
-                        # The pump stopping by itself is reported as state; the
-                        # command that started it stays applied in the backend.
-                        self.publish_state("bơm tự tắt hết thời lượng")
-                    if now >= next_telemetry:
-                        self.publish_telemetry()
-                        # Measured after publishing: a slow publish must not make
-                        # the next tick fire immediately.
-                        next_telemetry = time.monotonic() + config.interval_seconds
-                    if now >= next_heartbeat:
-                        self.publish_state("heartbeat")
-                        next_heartbeat = (
-                            time.monotonic() + config.state_heartbeat_seconds
-                        )
+                if self.connected.is_set():
+                    with self.lock:
+                        if self.runtime.pump_finished(now):
+                            # The pump stopping by itself is reported as state; the
+                            # command that started it stays applied in the backend.
+                            self.publish_state("bơm tự tắt hết thời lượng")
+                        if now >= next_telemetry:
+                            self.publish_telemetry()
+                            # Measured after publishing: a slow publish must not make
+                            # the next tick fire immediately.
+                            next_telemetry = (
+                                time.monotonic() + config.interval_seconds
+                            )
+                        if now >= next_heartbeat:
+                            self.publish_state("heartbeat")
+                            next_heartbeat = (
+                                time.monotonic() + config.state_heartbeat_seconds
+                            )
                 if config.message_count and self.telemetry_sent >= config.message_count:
                     LOGGER.info("Đã gửi đủ %d telemetry", config.message_count)
                     break
@@ -364,8 +400,10 @@ class Simulator:
                     self.runtime.relay_state = "off"
                     self.runtime.running_command_id = None
                     self.runtime.pump_stop_at = None
-                    # Last message before exit: here it is worth waiting.
-                    self.publish_state("tắt bơm trước khi thoát", wait=True)
+                    if self.connected.is_set():
+                        # Only wait while the connection is known live. The
+                        # disconnect callback never enters this publish path.
+                        self.publish_state("tắt bơm trước khi thoát", wait=True)
             self.client.disconnect()
             self.client.loop_stop()
             LOGGER.info(
@@ -404,6 +442,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         client = build_client(config)
         simulator = Simulator(config, client)
         client.on_connect = simulator.on_connect
+        client.on_disconnect = simulator.on_disconnect
         client.on_message = simulator.on_message
         simulator.run()
     except (ConnectionError, OSError, RuntimeError, TimeoutError) as error:

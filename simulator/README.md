@@ -51,6 +51,8 @@ Logic thuần nằm ở `device.py` để có thể unit test. Simulator:
 - trả `busy` cho ON khác khi bơm đang chạy;
 - ưu tiên OFF kể cả khi clock chưa đồng bộ, lệnh đã hết hạn hoặc qua reboot;
 - tự chuyển relay về `off` khi hết `duration_seconds` và phát state mới.
+- tắt relay và hủy timer ngay khi mất MQTT; reconnect phát state `off` nhưng
+  giữ mốc thứ tự/bộ nhớ command của boot để ON trùng không chạy lại.
 
 `applied` ở đây chỉ mô phỏng output relay, không chứng minh có nước chảy.
 

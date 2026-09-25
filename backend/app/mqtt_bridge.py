@@ -32,6 +32,9 @@ class MqttBridge:
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=f"{settings.mqtt_client_id}-{os.getpid()}",
+            # Explicit, not the library default: the broker must never queue
+            # commands or stale ACK/state for a client that was offline.
+            clean_session=True,
         )
         if settings.mqtt_username:
             self._client.username_pw_set(

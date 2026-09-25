@@ -22,13 +22,18 @@ MODELS = {"telemetry": TelemetryIn, "ack": AckIn, "state": StateIn}
 
 
 def summarize_validation_error(error: ValidationError) -> str:
-    fields = sorted(
-        {
-            ".".join(str(part) for part in item["loc"]) or "body"
-            for item in error.errors()
-        }
-    )
-    return "validation_error:" + ",".join(fields)
+    """Name the offending fields, or the rule for whole-payload checks."""
+    parts = set()
+    for item in error.errors():
+        field = ".".join(str(part) for part in item["loc"])
+        if field:
+            parts.add(field)
+            continue
+        # Cross-field rules (clock vs measured_at, sensor_status vs readings)
+        # have no field location, so keep their message instead of "body".
+        message = str(item.get("msg", "invalid payload"))
+        parts.add(message.removeprefix("Value error, ")[:120])
+    return "validation_error:" + ",".join(sorted(parts))
 
 
 def validate_message(topic: str, payload: bytes) -> tuple[str, object, dict]:
@@ -51,13 +56,27 @@ class MessageHandler:
             async with self._pool.connection() as conn:
                 if kind == "telemetry":
                     row_id = await repository.insert_telemetry(conn, topic, model, data)
-                    logger.info(
-                        "Stored telemetry id=%d device_id=%s sequence=%d simulated=%s",
-                        row_id,
-                        model.device_id,
-                        model.sequence,
-                        model.simulated,
-                    )
+                    if row_id is None:
+                        # Same device_id + boot_id + sequence: a resend, not an
+                        # invalid payload, so it is dropped without a reject row.
+                        logger.info(
+                            "Ignored duplicate telemetry device_id=%s boot_id=%s"
+                            " sequence=%d",
+                            model.device_id,
+                            model.boot_id,
+                            model.sequence,
+                        )
+                    else:
+                        logger.info(
+                            "Stored telemetry id=%d device_id=%s boot_id=%s"
+                            " sequence=%d clock_synced=%s simulated=%s",
+                            row_id,
+                            model.device_id,
+                            model.boot_id,
+                            model.sequence,
+                            model.clock_synced,
+                            model.simulated,
+                        )
                 elif kind == "ack":
                     outcome = await repository.apply_ack(conn, model, data)
                     logger.info(
@@ -67,12 +86,16 @@ class MessageHandler:
                         outcome,
                     )
                 else:
-                    await repository.apply_state(conn, model, data)
+                    outcome = await repository.apply_state(conn, model, data)
                     logger.info(
-                        "State device_id=%s relay_state=%s last_command_id=%s",
+                        "State device_id=%s boot_id=%s state_sequence=%d"
+                        " relay_state=%s last_command_id=%s -> %s",
                         model.device_id,
+                        model.boot_id,
+                        model.state_sequence,
                         model.relay_state,
                         model.last_command_id,
+                        outcome,
                     )
         except PayloadError as error:
             await self._reject(topic, str(error), payload)

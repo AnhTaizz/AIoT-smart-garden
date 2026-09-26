@@ -1,8 +1,8 @@
-# Người A — Thiết bị và firmware
+# Thành — Thiết bị và firmware (Embedded)
 
-Họ tên/GitHub username: điền trong [TEAM](../TEAM.md). Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Tất cả task hiện **Backlog**, chưa có bằng chứng thực hiện.
+Phụ trách: **Thành** (A). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B). Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
-Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của A/B/C tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
+Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
 
 Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dưới đây. Sau khi tạo Issues, điền link vào task và dùng Issue/Project làm nguồn trạng thái; file này giữ phạm vi và tiêu chí, tránh cập nhật hai bảng trạng thái song song.
 
@@ -12,23 +12,23 @@ Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát 
 
 ### A-W1-01 — Dựng simulator telemetry
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** G02; tích hợp lưu thật cần B-W1-01.
 - **Đầu ra:** `simulator/`, payload telemetry theo G02 và hướng dẫn phát bản tin.
 - **Tiêu chí nghiệm thu:** Phát được ít nhất 10 bản tin hợp lệ có `device_id` và sequence; B-W1-01 lưu được chúng vào PostgreSQL; dữ liệu `simulated` được ghi rõ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog — bootstrap publish đã có, nhưng task theo contract G02 và lưu DB end-to-end chưa bắt đầu.
-- **Issue / PR / bằng chứng:** `docs/BOOTSTRAP_REPORT.md` mới chứng minh publish và `mosquitto_sub` CLI riêng lẻ, chưa có backend subscriber.
+- **Trạng thái:** Review/Test — simulator `telemetry-v1` và luồng lưu backend đã có trên nhánh G02; chờ Thành review contract và PR.
+- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2); ngày 2026-09-26 simulator unit 31/31 và E2E backend thật 33/33. Phiên trước đã gửi telemetry `simulated: true` qua MQTT và đọc lại từ REST/PostgreSQL. Xem [bản ghi kiểm thử](../PR2_TEST_HANDOFF_2026-09-26.md). Đây là bằng chứng phần mềm, không phải nghiệm thu phần cứng/M1.
 
 ### A-W1-02 — Simulator nhận command và báo trạng thái
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W1-01, G02; tích hợp kết quả với B-W1-02.
 - **Đầu ra:** Subscribe `garden/node_01/control`; xử lý `command_id`; publish ACK và state trên hai topic tương ứng.
 - **Tiêu chí nghiệm thu:** Simulator nhận command, giữ nguyên `command_id`, gửi ACK `applied` hoặc `rejected` và state có `last_command_id`; lệnh trùng không khởi động lại bộ đếm; backend/UI quan sát đúng kết quả.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** Review/Test — implementation tham chiếu đã có trên nhánh G02; chờ Thành review và G02 AGREED.
+- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2); ngày 2026-09-26 simulator thật nhận `pump_on` thành `applied/on`, fail-safe về `off` sau khi broker disconnect/reconnect và không bật lại khi phát lại ON cũ. Unit 31/31; xem [bản ghi kiểm thử](../PR2_TEST_HANDOFF_2026-09-26.md). Chưa kiểm tra ESP32/UI/smartphone.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 
@@ -38,7 +38,7 @@ Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều k
 
 ### A-W2-01 — Đọc cảm biến và hiệu chuẩn
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** G03; core hardware đã nhận.
 - **Đầu ra:** firmware/; sơ đồ dây; bảng ADC; log lọc.
 - **Tiêu chí nghiệm thu:** Đọc AHT20/đất; ghi được lỗi; có tham chiếu khô/ướt và dữ liệu trước/sau lọc; % là thang tương đối.
@@ -48,7 +48,7 @@ Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều k
 
 ### A-W2-02 — Tích hợp relay/bơm và MQTT
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W2-01, A-W1-02, B-W2-02.
 - **Đầu ra:** Firmware telemetry, command và giới hạn chạy.
 - **Tiêu chí nghiệm thu:** Web gửi lệnh tới thiết bị thật; relay đúng cực kích; boot tắt; bơm tự dừng; ghi trạng thái xác nhận.
@@ -64,7 +64,7 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### A-W3-01 — Hoàn thiện logic tưới và lỗi
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W2-02, G02.
 - **Đầu ra:** State machine Manual/Auto, hysteresis, tưới theo nhịp.
 - **Tiêu chí nghiệm thu:** Thử khô/ẩm, sensor lỗi, mất mạng khi tưới, lệnh trùng, STOP và chuyển mode; giới hạn luôn áp dụng.
@@ -74,7 +74,7 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### A-W3-02 — Hoàn thiện reconnect và xử lý lỗi thiết bị
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W3-01, A-W2-02, G02.
 - **Đầu ra:** Firmware phục hồi Wi-Fi/MQTT; trạng thái offline/reconnect; xử lý sensor/command lỗi.
 - **Tiêu chí nghiệm thu:** Thử mất mạng và broker, reconnect không tự bật bơm hoặc chạy lại lệnh cũ; lỗi cảm biến vẫn giữ giới hạn an toàn và được báo rõ.
@@ -90,20 +90,20 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 
 ### A-W4-01 — Camera định kỳ và bộ ảnh thực
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W3-02, B-W4-01.
 - **Đầu ra:** Lịch chụp, vùng chụp, ảnh gốc có metadata.
-- **Tiêu chí nghiệm thu:** Ảnh mới đến backend với timestamp/device_id; thử upload lỗi và phục hồi; giao ảnh cho C.
+- **Tiêu chí nghiệm thu:** Ảnh mới đến backend với timestamp/device_id; thử upload lỗi và phục hồi; giao ảnh cho Toản (C).
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### A-W4-02 — Baseline độ phủ xanh và hỗ trợ dữ liệu
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W3-02.
 - **Đầu ra:** Script HSV; ảnh mask; mô tả giới hạn.
-- **Tiêu chí nghiệm thu:** Có ảnh/mask/độ phủ để đối chiếu; thử thay đổi ánh sáng; không gắn độ phủ với chẩn đoán bệnh; giao B/C tích hợp.
+- **Tiêu chí nghiệm thu:** Có ảnh/mask/độ phủ để đối chiếu; thử thay đổi ánh sáng; không gắn độ phủ với chẩn đoán bệnh; giao Tài/Toản tích hợp.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
@@ -116,17 +116,17 @@ Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 
 ### A-W5-01 — Kiểm tra camera trong hệ thống chung
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W4-01, C-W3-02.
 - **Đầu ra:** Log camera và bộ ảnh kiểm thử thực.
-- **Tiêu chí nghiệm thu:** Ghi ảnh mờ/tối/lỗi upload; C nhận được bộ ảnh chưa dùng để train/tune; báo thiếu dữ liệu nếu có.
+- **Tiêu chí nghiệm thu:** Ghi ảnh mờ/tối/lỗi upload; Toản (C) nhận được bộ ảnh chưa dùng để train/tune; báo thiếu dữ liệu nếu có.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### A-W5-02 — Ổn định thiết bị khi chạy chung
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W3-01, A-W4-01.
 - **Đầu ra:** Firmware tích hợp và ghi nhận lỗi đã sửa.
 - **Tiêu chí nghiệm thu:** Chụp/gửi ảnh không làm mất giới hạn bơm; ngắt/kết nối lại hoạt động theo thiết kế; cập nhật sơ đồ dây.
@@ -142,7 +142,7 @@ Mục tiêu chung: Testing/hardening; public Internet deployment chỉ optional 
 
 ### A-W6-01 — Thử lỗi và chạy kéo dài có giám sát
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 4 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W5-02.
 - **Đầu ra:** Biên bản phần cứng theo mẫu review.
 - **Tiêu chí nghiệm thu:** Ghi thời lượng/số chu kỳ; thử sensor lỗi, boot, mất mạng lúc tưới; mọi trường hợp bơm dừng theo giới hạn.
@@ -152,9 +152,9 @@ Mục tiêu chung: Testing/hardening; public Internet deployment chỉ optional 
 
 ### A-W6-02 — Tổng hợp kết quả firmware và lọc
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W6-01, A-W2-01.
-- **Đầu ra:** Biểu đồ trước/sau lọc; bảng kiểm thử; phần báo cáo A.
+- **Đầu ra:** Biểu đồ trước/sau lọc; bảng kiểm thử; phần báo cáo của Thành (A).
 - **Tiêu chí nghiệm thu:** Có điều kiện đo và dữ liệu nguồn; phân tích cả độ trễ lọc và lỗi; không tự tuyên bố tiết kiệm nước.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
@@ -168,17 +168,17 @@ Mục tiêu chung: Local mobile demo + repo + báo cáo + slide + video.
 
 ### A-W7-01 — Đóng gói mô hình và hướng dẫn thiết bị
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W6-02.
 - **Đầu ra:** Hướng dẫn dây/nguồn/nạp/calibration; checklist vật tư.
-- **Tiêu chí nghiệm thu:** B làm theo hướng dẫn nạp/khởi động được; cấu hình mẫu không có thông tin đăng nhập thật.
+- **Tiêu chí nghiệm thu:** Tài (B) làm theo hướng dẫn nạp/khởi động được; cấu hình mẫu không có thông tin đăng nhập thật.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Backlog.
 - **Issue / PR / bằng chứng:** chưa có.
 
-### A-W7-02 — Diễn tập và chốt phần trình bày A
+### A-W7-02 — Diễn tập và chốt phần trình bày của Thành (A)
 
-- **Owner:** A. **Reviewer:** B. **Ước lượng:** 3 giờ.
+- **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W7-01, M6.
 - **Đầu ra:** Demo phần cứng; câu hỏi phản biện; video chung.
 - **Tiêu chí nghiệm thu:** Tham gia hai lượt diễn tập; giải thích thuật toán và hành vi lỗi; xử lý lỗi còn lại trong phạm vi đã chốt.

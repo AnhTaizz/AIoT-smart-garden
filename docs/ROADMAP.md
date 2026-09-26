@@ -9,8 +9,8 @@ Tuần là số tương đối từ ngày nhóm bắt đầu, chưa gán ngày l
 | Mã | Chủ trì / kiểm tra | Thời lượng | Việc và đầu ra | Điều kiện hoàn thành |
 | --- | --- | --- | --- | --- |
 | G01 | Người điều phối / cả nhóm | 30 phút cả nhóm | Điền TEAM, chọn cây, chốt core/AI/ngoài phạm vi, mốc bắt đầu và giờ rảnh | Cả ba thống nhất; cập nhật PROJECT_STATE |
-| G02 | B / A và C | 60 phút cả nhóm | Chốt INTERFACES: telemetry, command, state/ack, API, lỗi và quyền điều khiển | Có ví dụ hợp lệ/lỗi; A và C xác nhận dùng được |
-| G03 | A / B | 30 phút + theo dõi | BOM đủ nguồn, dây, ống và dụng cụ nạp; dự toán toàn bộ; mua core; lịch có camera | Có người mua, ngày nhận; chi phí được nhóm chốt; không coi đặt hàng là đã test |
+| G02 | Tài (B) / Thành (A) và Toản (C) | 60 phút cả nhóm | Chốt INTERFACES: telemetry, command, state/ack, API, lỗi và quyền điều khiển | Có ví dụ hợp lệ/lỗi; Thành và Toản xác nhận dùng được |
+| G03 | Thành (A) / Tài (B) | 30 phút + theo dõi | BOM đủ nguồn, dây, ống và dụng cụ nạp; dự toán toàn bộ; mua core; lịch có camera | Có người mua, ngày nhận; chi phí được nhóm chốt; không coi đặt hàng là đã test |
 
 G01–G02 đi trước task tích hợp; G03 triển khai song song tuần 1. Đây là công việc chung, ngoài 42 task cá nhân. Phụ thuộc G03 trong task phần cứng còn yêu cầu linh kiện thực sự đã tới.
 
@@ -54,7 +54,7 @@ M1 chỉ được ghi **PASS** khi có bằng chứng cho tất cả điều ki�
 - Backend lưu/theo dõi và phân biệt `pending`, `applied`, `rejected`, `timeout`.
 - UI chỉ báo áp dụng thành công sau ACK/state phù hợp; HTTP 2xx chỉ xác nhận backend đã nhận request.
 
-PASS riêng lẻ của container, health endpoint, MQTT publish, API, UI hoặc LAN binding không được dùng thay bằng chứng end-to-end M1. `docs/INTERFACES.md` phải được A/B/C xác nhận ở G02 trước nghiệm thu.
+PASS riêng lẻ của container, health endpoint, MQTT publish, API, UI hoặc LAN binding không được dùng thay bằng chứng end-to-end M1. `docs/INTERFACES.md` phải được cả 3 thành viên (Thành, Tài, Toản) xác nhận ở G02 trước nghiệm thu.
 
 ## Luồng phụ thuộc chính
 
@@ -64,7 +64,7 @@ M1–M3 là đường găng. Không chuyển nguồn lực sang tích hợp AI k
 
 ## Quy tắc điều chỉnh
 
-- Giữa tuần 2 chưa có core hardware: A đưa phương án mua/mượn/thay linh kiện; cả nhóm cập nhật lịch. M2 không được ghi PASS bằng simulator.
+- Giữa tuần 2 chưa có core hardware: Thành (A) đưa phương án mua/mượn/thay linh kiện; cả nhóm cập nhật lịch. M2 không được ghi PASS bằng simulator.
 - Cuối tuần 3 chưa có IoT end-to-end ổn định: cả nhóm tiếp tục xử lý core và lùi/thu hẹp AI; ghi rõ ảnh hưởng lịch. Không giảm tiêu chí dừng bơm để chạy kịp.
 - Tuần 4 nếu AI thiếu dữ liệu: thu hẹp nhãn hoặc đổi bài toán khả thi; ghi quyết định và cập nhật với thầy nếu thay cam kết. Không gọi HSV là mô hình học máy để thay phần còn thiếu.
 - Cuối tuần 5 đóng phạm vi. Weather API không thuộc core scope. Cloud deploy chỉ nhận ở tuần 6 nếu local mobile demo, core IoT và AI baseline đã đạt, có đủ người và thời gian kiểm thử.

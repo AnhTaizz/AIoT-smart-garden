@@ -1,31 +1,64 @@
 # Simulator
 
-Trạng thái: publish telemetry bootstrap đã được kiểm tra trong TASK-000E; chưa nhận command.
+Trạng thái: đã triển khai hai chiều theo bản đề xuất `v1` trong
+[`docs/INTERFACES.md`](../docs/INTERFACES.md), nhưng G02 vẫn là **DRAFT** chờ
+Thành, Tài và Toản xác nhận. Simulator là thiết bị tham chiếu cho M1, không thay
+thế kiểm thử ESP32, cảm biến, relay hoặc bơm thật.
 
-`simulator.py` phát JSON mô phỏng tới MQTT broker. Mỗi payload và mỗi dòng log đều chỉ rõ đây là dữ liệu mô phỏng. Simulator chỉ hỗ trợ tích hợp phần mềm; không thay thế nghiệm thu cảm biến hoặc phần cứng thật.
+`simulator.py` dùng cùng bốn topic với thiết bị:
 
-## Payload bootstrap
+| Topic | Hướng | QoS | Retained |
+| --- | --- | --- | --- |
+| `garden/<id>/telemetry` | simulator → backend | 0 | không |
+| `garden/<id>/control` | backend → simulator | 1 | không |
+| `garden/<id>/ack` | simulator → backend | 1 | không |
+| `garden/<id>/state` | simulator → backend | 1 | không |
 
-`docs/INTERFACES.md` vẫn là DRAFT, vì vậy payload dưới đây chỉ là đề xuất `bootstrap-telemetry-v0`, chưa phải contract G02 đã thống nhất:
+MQTT dùng clean session. Mỗi lần chạy có `boot_id` mới, phát state ngay sau khi
+kết nối, telemetry luôn có `simulated: true`, rồi nhận command và trả ACK/state.
+
+## Telemetry v1
 
 ```json
 {
-  "schema": "bootstrap-telemetry-v0",
+  "schema": "telemetry-v1",
   "simulated": true,
   "device_id": "node_01",
+  "boot_id": "boot_9c1f0b1f",
   "sequence": 1,
-  "measured_at": "2026-09-13T10:00:00.000Z",
+  "clock_synced": true,
+  "measured_at": "2026-09-25T09:10:00.000Z",
+  "uptime_ms": 1250,
   "temperature_c": 27.31,
   "air_humidity_pct": 68.42,
-  "soil_moisture_pct": 45.18
+  "soil_moisture_pct": 45.18,
+  "sensor_status": {"aht20": "ok", "soil": "ok"}
 }
 ```
 
-Các số trong ví dụ chỉ minh họa định dạng JSON, không phải kết quả đo. Simulator dùng QoS 0 và `retain=false` như mặc định bootstrap; QoS/retained chính thức vẫn phải chốt ở G02.
+Các số chỉ minh họa định dạng, không phải kết quả đo. `--sensor-error` đặt giá
+trị cảm biến tương ứng thành `null` cùng trạng thái `error`. `--clock-unsynced`
+đặt các timestamp thiết bị thành `null` và làm `pump_on` bị từ chối bằng
+`clock_unsynced`; `pump_off` vẫn được áp dụng.
+
+## Xử lý command
+
+Logic thuần nằm ở `device.py` để có thể unit test. Simulator:
+
+- giữ nguyên `command_id`, kiểm tra `target_boot_id` và `expires_at` trước ON;
+- từ chối ON cũ hơn mốc STOP bằng `command_sequence`;
+- không chạy lại hoặc kéo dài bộ đếm khi nhận trùng `command_id`;
+- trả `busy` cho ON khác khi bơm đang chạy;
+- ưu tiên OFF kể cả khi clock chưa đồng bộ, lệnh đã hết hạn hoặc qua reboot;
+- tự chuyển relay về `off` khi hết `duration_seconds` và phát state mới.
+- tắt relay và hủy timer ngay khi mất MQTT; reconnect phát state `off` nhưng
+  giữ mốc thứ tự/bộ nhớ command của boot để ON trùng không chạy lại.
+
+`applied` ở đây chỉ mô phỏng output relay, không chứng minh có nước chảy.
 
 ## Cấu hình
 
-Tham số CLI được ưu tiên hơn biến môi trường.
+CLI ưu tiên hơn biến môi trường.
 
 | Nội dung | CLI | Biến môi trường | Mặc định |
 | --- | --- | --- | --- |
@@ -33,14 +66,20 @@ Tham số CLI được ưu tiên hơn biến môi trường.
 | Port | `--port` | `MQTT_BROKER_PORT` | `1883` |
 | Username | `--username` | `MQTT_USERNAME` | không có |
 | Password | `--password` | `MQTT_PASSWORD` | không có |
-| Topic | `--topic` | `MQTT_TOPIC` | `garden/<device_id>/telemetry` |
 | Device ID | `--device-id` | `DEVICE_ID` | `node_01` |
-| Chu kỳ gửi | `--interval` | `TELEMETRY_INTERVAL_SECONDS` | `2` giây |
-| Số bản tin | `--count` | `TELEMETRY_MESSAGE_COUNT` | `0` — gửi liên tục |
+| Boot ID cố định để test | `--boot-id` | `BOOT_ID` | sinh mới |
+| Chu kỳ telemetry | `--interval` | `TELEMETRY_INTERVAL_SECONDS` | `2` giây |
+| Số telemetry | `--count` | `TELEMETRY_MESSAGE_COUNT` | `0` — liên tục |
+| Heartbeat state | `--state-heartbeat` | `STATE_HEARTBEAT_SECONDS` | `10` giây |
+| Giới hạn bơm cục bộ | `--pump-max-seconds` | `PUMP_MAX_SECONDS` | `60` giây |
+| Đồng hồ | `--clock-unsynced` | `CLOCK_SYNCED` | dùng UTC của máy chạy |
+| Lỗi cảm biến | `--sensor-error` | `SENSOR_ERROR` | `none` |
 
-`--count 10` gửi đúng 10 bản tin rồi dừng. `--count 0` gửi liên tục và dừng gọn khi nhấn Ctrl+C. Khi broker cần xác thực, nên đặt password bằng biến môi trường để tránh lưu trong lịch sử lệnh.
+Không đưa username/password thật vào source hoặc ảnh chụp log.
 
-## Chạy trên Linux/macOS
+## Chạy
+
+Linux/macOS:
 
 ```bash
 cd simulator
@@ -50,9 +89,7 @@ python -m pip install -r requirements.txt
 python simulator.py --count 10 --interval 1
 ```
 
-## Chạy trên Windows PowerShell 5.1
-
-Từ root repository:
+Windows PowerShell 5.1, từ root repository:
 
 ```powershell
 Set-Location .\simulator
@@ -60,53 +97,16 @@ py -3 -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r .\requirements.txt
-
-$env:MQTT_BROKER_HOST = "127.0.0.1"
-$env:MQTT_BROKER_PORT = "1883"
-$env:DEVICE_ID = "node_01"
-$env:TELEMETRY_INTERVAL_SECONDS = "1"
-$env:TELEMETRY_MESSAGE_COUNT = "10"
-
-python .\simulator.py
+python .\simulator.py --count 10 --interval 1
 ```
 
-Nếu broker yêu cầu xác thực:
+Simulator phải kết nối cùng broker với backend và dùng một `device_id` không
+đồng thời được ESP32 thật sử dụng. Với `--count 0`, nhấn Ctrl+C để dừng gọn;
+nếu relay đang `on`, simulator phát state `off` trước khi thoát.
 
-```powershell
-$env:MQTT_USERNAME = "<username>"
-$env:MQTT_PASSWORD = "<password>"
-python .\simulator.py
-```
+## Kiểm tra
 
-Không đưa username/password thật vào Git hoặc ảnh chụp log.
-
-## Xác nhận đủ 10 bản tin bằng subscriber thật
-
-Khởi động Mosquitto từ thư mục gốc, sau đó mở subscriber trước khi chạy simulator:
-
-```bash
-docker compose up -d mosquitto
-docker compose exec mosquitto mosquitto_sub \
-  -h 127.0.0.1 \
-  -t garden/node_01/telemetry \
-  -C 10 \
-  -v
-```
-
-Trong terminal khác:
-
-```bash
-cd simulator
-python simulator.py --count 10 --interval 1
-```
-
-`mosquitto_sub -C 10` chỉ thoát sau khi nhận đủ 10 bản tin. Đối chiếu `sequence` từ 1 đến 10 và xác nhận mọi payload có `simulated: true`. Trên PowerShell 5.1, chạy lệnh subscriber trên một dòng:
-
-```powershell
-docker compose exec mosquitto mosquitto_sub -h 127.0.0.1 -t garden/node_01/telemetry -C 10 -v
-```
-
-## Kiểm tra không cần broker
+Không cần broker:
 
 ```bash
 cd simulator
@@ -114,4 +114,7 @@ python -m unittest discover -s tests -v
 python simulator.py --help
 ```
 
-TASK-000D chưa nhận command, gửi ACK/state hoặc lưu PostgreSQL. Không dùng simulator để đánh dấu phần cứng thật là đã nghiệm thu.
+Kiểm tra tích hợp cần stack Compose đang chạy. Sau khi simulator đã phát state,
+gửi `POST /devices/<id>/commands`, poll `GET /commands/<command_id>`, rồi kiểm
+tra `GET /devices/<id>/state` và telemetry history. Kết quả thành phần không
+được dùng để ghi M1 PASS khi UI và smartphone LAN thật chưa được kiểm tra.

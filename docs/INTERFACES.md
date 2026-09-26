@@ -1,6 +1,6 @@
 # Thỏa thuận giao tiếp — Bản nháp cho G02
 
-Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Bản đề xuất cụ thể để chốt nằm ở mục [Bản đề xuất v1 của Tài (B)](#bản-đề-xuất-v1-của-tài-b--chờ-nhóm-chốt-ở-g02) cuối file. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. Tài (B) chủ trì, Thành (A) và Toản (C) cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR.
+Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Bản đề xuất cụ thể để chốt nằm ở mục [Bản đề xuất v1 của Tài (B)](#bản-đề-xuất-v1-của-tài-b--chờ-nhóm-chốt-ở-g02) cuối file. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. Tài (B) chủ trì, Thành (A) và Toản (C) cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR. Implementation tham chiếu trên draft PR #2 đã được kiểm tra tại `6ba6eb46`; xem [bản ghi regression và bàn giao](PR2_TEST_HANDOFF_2026-09-26.md). Bằng chứng này không thay cho xác nhận G02 hoặc nghiệm thu M1.
 
 ## Ranh giới xử lý
 

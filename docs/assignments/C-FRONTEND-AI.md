@@ -1,6 +1,6 @@
 # Toản — Frontend và AI (Frontend-AI)
 
-Phụ trách: **Toản** (C). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B); phối hợp **Thành** (A) cho dữ liệu camera. Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Tất cả task hiện **Backlog**, chưa có bằng chứng thực hiện.
+Phụ trách: **Toản** (C). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B); phối hợp **Thành** (A) cho dữ liệu camera. Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
 Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
 
@@ -10,6 +10,13 @@ Trước khi có GitHub Issues, cập nhật trạng thái trong từng task dư
 
 Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command đúng vòng đời và chạy được trên smartphone qua LAN.
 
+### Bàn giao từ PR #2 cho C-W1
+
+- **Dependency:** dùng nhánh `feat/B-W1-backend-telemetry-command` của [draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2); code API đã kiểm tra tại `6ba6eb46`. `main` chưa có các API này, vì vậy không phát triển/tích hợp C-W1 trên `main` cũ.
+- **Cách chạy:** từ root chạy `docker compose up --build -d`; sau khi bốn service healthy, chạy simulator theo [simulator/README](../../simulator/README.md). Trình duyệt luôn gọi đường dẫn tương đối `/api`; endpoint và response mẫu nằm trong [INTERFACES](../INTERFACES.md) và [backend/README](../../backend/README.md).
+- **Checklist UI:** hiển thị latest/history thật; phân biệt `loading`, `empty`, `error`, `stale` và `simulated`; gửi `pump_on` có thời lượng và `pump_off`; theo dõi `pending/applied/rejected/timeout` và không suy luận thành công từ HTTP 202; hiển thị current relay state tách khỏi kết quả command; vẫn cho phép STOP khi ON đang pending nếu API còn kết nối; poll theo contract, cleanup timer/request khi unmount và dừng poll nhanh khi command kết thúc; cuối cùng kiểm tra `/api` trên smartphone cùng LAN.
+- **Bằng chứng dependency:** backend unit 51/51, simulator 31/31, E2E thật 33/33 và broker disconnect regression đều PASS ngày 2026-09-26; xem [bản ghi kiểm thử/bàn giao](../PR2_TEST_HANDOFF_2026-09-26.md). G02 vẫn DRAFT, nên Toản cần review dữ liệu REST trước khi nhóm đổi sang AGREED.
+
 ### C-W1-01 — Dựng dashboard tối thiểu và nối API
 
 - **Owner:** Toản. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
@@ -17,8 +24,8 @@ Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command 
 - **Đầu ra:** Dashboard dùng latest/history API; nút command; trạng thái `pending/applied/rejected/timeout`.
 - **Tiêu chí nghiệm thu:** UI hiển thị telemetry simulator đã đi qua MQTT/PostgreSQL/API; gửi command có `command_id`; chỉ báo thành công khi backend trả trạng thái `applied` từ ACK/state, không dựa vào HTTP 2xx.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog — bootstrap health/readiness UI đã có; telemetry thật và command UI chưa bắt đầu.
-- **Issue / PR / bằng chứng:** Frontend test hiện chỉ chứng minh trạng thái mất kết nối và không tạo số liệu giả.
+- **Trạng thái:** Ready — bootstrap health/readiness UI đã có; backend/simulator dependency có trên PR #2; telemetry thật và command UI chưa bắt đầu.
+- **Issue / PR / bằng chứng:** Dependency và checklist nằm ở mục bàn giao phía trên. Frontend test hiện chỉ chứng minh trạng thái mất kết nối và không tạo số liệu giả.
 
 ### C-W1-02 — Hoàn thiện responsive và kiểm tra smartphone LAN
 

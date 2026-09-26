@@ -1,6 +1,6 @@
 # Smart Garden — Kế hoạch triển khai 7 tuần
 
-Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. Repository hiện có khung hạ tầng development, hai endpoint kiểm tra sức khỏe của backend và dashboard React cơ bản; chưa có chức năng IoT nghiệp vụ hoàn chỉnh.
+Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` hiện có khung hạ tầng development và dashboard React cơ bản. [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2) đã triển khai backend/simulator hai chiều gồm MQTT ingest, PostgreSQL, latest/history API và command/ACK/state; phần này chưa merge, còn frontend telemetry/command và phiên smartphone LAN vẫn chưa có.
 
 Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
 
@@ -46,6 +46,7 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | [INTERFACES](docs/INTERFACES.md) | Những thỏa thuận giao tiếp cần chốt trước tích hợp |
 | [WORKFLOW](docs/WORKFLOW.md) | Task, review, Git, GitHub và xử lý chậm tiến độ |
 | [PROJECT_STATE](docs/PROJECT_STATE.md) | Trạng thái thực tế và việc tiếp theo |
+| [PR2_TEST_HANDOFF_2026-09-26](docs/PR2_TEST_HANDOFF_2026-09-26.md) | Bằng chứng regression và bàn giao API cho C-W1 |
 | [WEEKLY_REVIEW](docs/templates/WEEKLY_REVIEW.md) | Mẫu nghiệm thu tuần và ghi kết quả |
 
 Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_request_template.md`.

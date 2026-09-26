@@ -1,6 +1,6 @@
 # Tài — Backend và dữ liệu (Backend)
 
-Phụ trách: **Tài** (B). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Toản** (C); phối hợp **Thành** (A) cho giao tiếp thiết bị. Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Tất cả task hiện **Backlog**, chưa có bằng chứng thực hiện.
+Phụ trách: **Tài** (B). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Toản** (C); phối hợp **Thành** (A) cho giao tiếp thiết bị. Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
 Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
 
@@ -18,7 +18,7 @@ Mục tiêu chung: backend nối đủ MQTT subscriber → PostgreSQL → REST A
 - **Tiêu chí nghiệm thu:** Ít nhất 10 telemetry hợp lệ từ simulator được lưu và truy vấn lại đúng `device_id`/sequence; JSON lỗi không làm dừng subscriber và không được lưu như dữ liệu hợp lệ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** Review/Test — code xong trên nhánh `feat/B-W1-backend-telemetry-command`, chờ Toản review; payload theo đề xuất của Tài, G02 chưa chốt.
-- **Issue / PR / bằng chứng:** 2026-09-18, môi trường development (Docker Compose): simulator thật phát 10 bản tin `node_01` → PostgreSQL có đúng 10 dòng sequence 1–10, đọc lại qua `/api/devices/node_01/telemetry` và `/latest`. E2E: JSON hỏng, sai kiểu, ngoài miền, `device_id` khác topic đều vào `rejected_message`, subscriber vẫn lưu bản tin hợp lệ sau đó. PostgreSQL/Mosquitto restart: API trả 503 khi DB down rồi tự phục hồi; subscriber tự kết nối lại broker. Cách chạy: [backend/README](../../backend/README.md). PR: chưa mở.
+- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2). Ngày 2026-09-26 backend unit 51/51 và E2E thật 33/33; telemetry hợp lệ được lưu/truy vấn, payload lỗi bị từ chối và subscriber tiếp tục chạy. Cách chạy: [backend/README](../../backend/README.md); chi tiết: [bản ghi kiểm thử](../PR2_TEST_HANDOFF_2026-09-26.md).
 
 ### B-W1-02 — REST telemetry và vòng đời command
 
@@ -27,8 +27,8 @@ Mục tiêu chung: backend nối đủ MQTT subscriber → PostgreSQL → REST A
 - **Đầu ra:** Latest/history API đọc PostgreSQL; API tạo/theo dõi command; MQTT publish control và consume ACK/state.
 - **Tiêu chí nghiệm thu:** Latest/history trả telemetry đã lưu; command có `command_id`; backend phân biệt `pending`, `applied`, `rejected`, `timeout`; HTTP 2xx tạo command không được coi là thiết bị đã áp dụng.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Review/Test — phía backend đã xong, chờ Toản review và phiên tích hợp với simulator nhận command (A-W1-02).
-- **Issue / PR / bằng chứng:** 2026-09-18, development: e2e test (8 kịch bản) PASS cho latest/history, command 202 `pending` → `applied` chỉ sau ACK, `rejected` giữ lý do, `timeout` sau 15 giây và ACK trễ không đổi thành `applied`, ACK sai thiết bị bị bỏ qua. Thử bằng tay qua `/api` với `mosquitto_pub` đóng vai thiết bị. Chưa kiểm tra với simulator/ESP32 thật gửi ACK. PR: chưa mở.
+- **Trạng thái:** Review/Test — backend và simulator tham chiếu đã xong trên PR #2; chờ Toản review REST/UI, Thành review quy tắc thiết bị và cả nhóm chốt G02.
+- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2). Ngày 2026-09-26 E2E thật 33/33 gồm deadline race và ACK order; simulator thật gửi ACK/state, command thành `applied`, rồi fail-safe OFF khi broker disconnect. Xem [bản ghi kiểm thử và bàn giao](../PR2_TEST_HANDOFF_2026-09-26.md). Chưa kiểm tra ESP32/UI/smartphone.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 

@@ -1,5 +1,7 @@
 # Bản ghi kiểm thử và bàn giao PR #2 — 2026-09-26
 
+> **Historical snapshot:** file này giữ nguyên bối cảnh ngày 2026-09-26, khi PR #2 còn draft. Trạng thái hiện hành: PR #2 đã merge vào `main`; xem [PROJECT_STATE](PROJECT_STATE.md) và [ROADMAP](ROADMAP.md). Các câu “chưa merge” bên dưới là lịch sử, không phải current truth.
+
 ## Phiên bản và phạm vi
 
 - Repository: `https://github.com/AnhTaizz/AIoT-smart-garden.git`.

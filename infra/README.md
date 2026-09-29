@@ -39,7 +39,7 @@ docker compose -f compose.yaml -f compose.lan.yaml up --build -d
 
 Khi đó điện thoại cùng LAN mở `http://<IP_LAN_LAPTOP>:5173`; ESP32 dùng `<IP_LAN_LAPTOP>:1883` làm broker. FastAPI và PostgreSQL vẫn bind localhost; Nginx gọi `http://backend:8000` trong mạng Compose và proxy `/api` cho điện thoại.
 
-Không hardcode IP laptop trong Compose hoặc frontend. Chỉ cho phép inbound `5173` và `1883` trên mạng Private; cấu hình anonymous hiện tại không được dùng trên Wi-Fi công cộng hoặc public Internet. Backend vẫn chưa kết nối MQTT; Mosquitto mới là nền tảng cho task tích hợp tiếp theo.
+Không hardcode IP laptop trong Compose hoặc frontend. Chỉ cho phép inbound `5173` và `1883` trên mạng Private; cấu hình anonymous hiện tại không được dùng trên Wi-Fi công cộng hoặc public Internet. Backend hiện đã subscribe telemetry/ACK/state và publish control qua Mosquitto; firmware ESP32 và security production vẫn chưa triển khai.
 
 Dừng container nhưng giữ dữ liệu PostgreSQL:
 

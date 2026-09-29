@@ -1,8 +1,8 @@
-# Smart Garden — Kế hoạch triển khai 7 tuần
+# AIoT Smart Garden
 
-Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` hiện có khung hạ tầng development và dashboard React cơ bản. [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2) đã triển khai backend/simulator hai chiều gồm MQTT ingest, PostgreSQL, latest/history API và command/ACK/state; phần này chưa merge, còn frontend telemetry/command và phiên smartphone LAN vẫn chưa có.
+Bộ tài liệu và source cho dự án nhóm 3 người. Audit ngày 2026-09-29 xác nhận PR #2 (backend/simulator) và PR #3 (React telemetry/control) đã merge vào `main`. G02 đã **AGREED** và M1 Web/LAN đã được nhóm nghiệm thu end-to-end trên browser điện thoại; firmware ESP32 thật, M1.5 Capacitor/Android, camera và AI vẫn chưa hoàn thành. Xem trạng thái có bằng chứng trong [PROJECT_STATE](docs/PROJECT_STATE.md) và kế hoạch sống trong [ROADMAP](docs/ROADMAP.md).
 
-Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
+Demo chính là **LOCAL MOBILE DEMO**: laptop chạy FastAPI, Mosquitto và PostgreSQL; ReactJS chạy trên browser hoặc cùng production build được đóng gói bằng Capacitor thành Android APK. Điện thoại và ESP32 kết nối cùng Wi-Fi/hotspot với laptop. Public Internet deployment không bắt buộc.
 
 ## Bắt đầu từ đâu?
 
@@ -18,21 +18,22 @@ Một khu vực trồng thử nghiệm, ESP32, cảm biến đất Capacitive v1
 
 Mục tiêu bắt buộc: giám sát, lưu lịch sử, điều khiển Manual/Auto từ laptop hoặc điện thoại, tưới có giới hạn và xử lý lỗi cơ bản. Phải hoàn thành luồng IoT end-to-end trước khi tích hợp AI. ESP32-CAM và một bài toán AI baseline nhỏ có đánh giá bắt đầu ở tuần 4; độ phủ xanh bằng HSV là baseline xử lý ảnh, không được gọi là mô hình ML đã huấn luyện. Weather API, nhiều khu vực trồng và tối ưu nâng cao không thuộc core scope.
 
-## Kiến trúc demo local mobile
+## Kiến trúc hiện hành
 
 ```text
-Điện thoại ──HTTP qua Wi-Fi/hotspot──> IP LAN laptop:5173
-                                            │
-                                            ▼
-                                      React / Nginx
-                                            │ /api
-                                            ▼
-ESP32 ──MQTT qua Wi-Fi/hotspot──> Mosquitto → FastAPI → PostgreSQL
-                                            │
-                                            └── command → ESP32 → ACK/state
+ESP32 / ESP32-CAM ──MQTT──> Mosquitto ──> FastAPI ──> PostgreSQL
+                                ^              │
+                                │              └── REST / WebSocket
+                                │                         │
+                                └──── command <───────────+── ReactJS web
+                                                          └── ReactJS build
+                                                              + Capacitor
+                                                              + Android APK
 ```
 
-React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng Docker Compose. Điện thoại chỉ cần truy cập dashboard; frontend proxy API trong mạng Docker. ESP32 dùng IP LAN của laptop làm địa chỉ MQTT broker. Không dùng hostname Docker như `frontend`, `backend` hoặc `mosquitto` trên điện thoại/ESP32.
+Chỉ có **một frontend ReactJS**, thiết kế responsive/mobile-first. Browser dùng React/Nginx; Android dùng chính production build đó trong native container/WebView của Capacitor. Không dùng React Native, Flutter hoặc một native UI riêng. Frontend không giao tiếp MQTT trực tiếp và không sở hữu logic safety; mọi intent điều khiển đi qua FastAPI rồi MQTT tới ESP32.
+
+WebSocket nằm trong kiến trúc mục tiêu nhưng chưa được implement; frontend hiện dùng REST polling. ESP32 vẫn là nơi sở hữu Manual/Auto, relay, pump safety, local timeout và fail-safe.
 
 ## Các tài liệu
 
@@ -41,7 +42,7 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | [TEAM](docs/TEAM.md) | Ai chịu trách nhiệm, phối hợp và bàn giao gì |
 | [ROADMAP](docs/ROADMAP.md) | Phase, milestone, lịch 7 tuần và task chung |
 | [A-EMBEDDED](docs/assignments/A-EMBEDDED.md) | 14 task của Thành (Thiết bị và firmware / Embedded) |
-| [B-BACKEND](docs/assignments/B-BACKEND.md) | 14 task của Tài (Backend và dữ liệu) |
+| [B-BACKEND](docs/assignments/B-BACKEND.md) | Backend, integration và mobile packaging của Tài |
 | [C-FRONTEND-AI](docs/assignments/C-FRONTEND-AI.md) | 14 task của Toản (Frontend và AI) |
 | [INTERFACES](docs/INTERFACES.md) | Những thỏa thuận giao tiếp cần chốt trước tích hợp |
 | [WORKFLOW](docs/WORKFLOW.md) | Task, review, Git, GitHub và xử lý chậm tiến độ |
@@ -120,6 +121,14 @@ Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong 
 
 `compose.lan.yaml` chỉ thay port publishing của frontend và Mosquitto; frontend vẫn proxy `/api` tới FastAPI qua mạng Docker. File không chứa IP laptop, vì IP có thể đổi theo Wi-Fi/hotspot. Mosquitto hiện cho phép anonymous cho development/local demo tin cậy; tuyệt đối không dùng cấu hình này trên Wi-Fi công cộng hoặc public Internet. Nếu điện thoại không mở được dashboard, kiểm tra hai thiết bị có cùng subnet, client isolation và firewall trước khi sửa code.
 
+### M1.5 — Android app bằng Capacitor
+
+Capacitor/Android hiện là **TODO/NEXT** và tách thành milestone M1.5; M1 Web/LAN đã DONE, không phụ thuộc Android packaging. Khi thêm Android platform, B dùng production build của cùng frontend ReactJS do C phát triển; không tạo codebase mobile thứ hai.
+
+Trong app Android, `http://localhost:8000` là chính điện thoại và không thể trỏ tới backend trên laptop. Bản DEV trên LAN phải nhận API base URL qua cấu hình build, ví dụ `VITE_API_BASE_URL=http://<LAPTOP_LAN_IP>:<BACKEND_PORT>`. Khi có WebSocket, dùng cấu hình riêng tương đương như `VITE_WS_BASE_URL`; không hard-code IP cụ thể vào source hoặc coi một IP là cố định.
+
+Nếu Android chặn cleartext HTTP, chỉ cấu hình ngoại lệ cho DEV/local LAN với phạm vi cần thiết. Production phải hướng tới HTTPS/WSS. Ưu tiên cài và test trên điện thoại Android thật qua USB debugging/`adb`; emulator là optional.
+
 Kiểm tra backend trên Linux/macOS/WSL:
 
 ```bash
@@ -173,7 +182,7 @@ python -m pip install -r .\requirements.txt
 python .\simulator.py --count 10 --interval 1
 ```
 
-Payload luôn có `simulated: true` và schema `telemetry-v1`. Simulator cũng subscribe command, gửi ACK/state và tự dừng bơm mô phỏng theo bản đề xuất G02. `INTERFACES.md` vẫn là DRAFT chờ cả nhóm xác nhận; dữ liệu simulator không phải số đo thật và không thay nghiệm thu ESP32/bơm. Cấu hình và cách kiểm tra nằm trong `simulator/README.md`.
+Payload luôn có `simulated: true` và schema `telemetry-v1`. Simulator cũng subscribe command, gửi ACK/state và tự dừng bơm mô phỏng theo contract G02 đã AGREED. M1 Web/LAN dùng simulator đã được nghiệm thu, nhưng dữ liệu simulator không phải số đo thật và không thay nghiệm thu ESP32/bơm ở M2. Cấu hình và cách kiểm tra nằm trong `simulator/README.md`.
 
 ## Dừng môi trường
 

@@ -1,6 +1,6 @@
 # Toản — Frontend và AI (Frontend-AI)
 
-Phụ trách: **Toản** (C). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B); phối hợp **Thành** (A) cho dữ liệu camera. Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
+Phụ trách: **Toản** (C). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B); phối hợp **Thành** (A) cho dữ liệu camera. C sở hữu một frontend ReactJS responsive/mobile-first dùng chung cho web và Android; B đóng gói cùng codebase bằng Capacitor. Không tạo React Native/Flutter/native UI riêng. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
 Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
 
@@ -12,10 +12,10 @@ Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command 
 
 ### Bàn giao từ PR #2 cho C-W1
 
-- **Dependency:** dùng nhánh `feat/B-W1-backend-telemetry-command` của [draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2); code API đã kiểm tra tại `6ba6eb46`. `main` chưa có các API này, vì vậy không phát triển/tích hợp C-W1 trên `main` cũ.
+- **Dependency hiện tại:** PR #2 đã merge vào `main` ở merge commit `cd5e8ee`; PR #3 chứa React telemetry/control đã merge ở `208bf77`. Dùng `main` hiện tại, không quay lại nhánh handoff cũ.
 - **Cách chạy:** từ root chạy `docker compose up --build -d`; sau khi bốn service healthy, chạy simulator theo [simulator/README](../../simulator/README.md). Trình duyệt luôn gọi đường dẫn tương đối `/api`; endpoint và response mẫu nằm trong [INTERFACES](../INTERFACES.md) và [backend/README](../../backend/README.md).
 - **Checklist UI:** hiển thị latest/history thật; phân biệt `loading`, `empty`, `error`, `stale` và `simulated`; gửi `pump_on` có thời lượng và `pump_off`; theo dõi `pending/applied/rejected/timeout` và không suy luận thành công từ HTTP 202; hiển thị current relay state tách khỏi kết quả command; vẫn cho phép STOP khi ON đang pending nếu API còn kết nối; poll theo contract, cleanup timer/request khi unmount và dừng poll nhanh khi command kết thúc; cuối cùng kiểm tra `/api` trên smartphone cùng LAN.
-- **Bằng chứng dependency:** backend unit 51/51, simulator 31/31, E2E thật 33/33 và broker disconnect regression đều PASS ngày 2026-09-26; xem [bản ghi kiểm thử/bàn giao](../PR2_TEST_HANDOFF_2026-09-26.md). G02 vẫn DRAFT, nên Toản cần review dữ liệu REST trước khi nhóm đổi sang AGREED.
+- **Bằng chứng dependency:** audit 2026-09-29 có backend 84/84, simulator 31/31, frontend 5/5 và production build PASS. Bản ghi broker disconnect thật nằm trong [PR2 test handoff](../PR2_TEST_HANDOFF_2026-09-26.md). G02 đã AGREED và M1 Web/LAN đã được nhóm nghiệm thu.
 
 ### C-W1-01 — Dựng dashboard tối thiểu và nối API
 
@@ -24,8 +24,8 @@ Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command 
 - **Đầu ra:** Dashboard dùng latest/history API; nút command; trạng thái `pending/applied/rejected/timeout`.
 - **Tiêu chí nghiệm thu:** UI hiển thị telemetry simulator đã đi qua MQTT/PostgreSQL/API; gửi command có `command_id`; chỉ báo thành công khi backend trả trạng thái `applied` từ ACK/state, không dựa vào HTTP 2xx.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Ready — bootstrap health/readiness UI đã có; backend/simulator dependency có trên PR #2; telemetry thật và command UI chưa bắt đầu.
-- **Issue / PR / bằng chứng:** Dependency và checklist nằm ở mục bàn giao phía trên. Frontend test hiện chỉ chứng minh trạng thái mất kết nối và không tạo số liệu giả.
+- **Trạng thái:** `[x] DONE` cho M1 — implementation đã merge và phiên UI → backend/MQTT/simulator → ACK/state trên browser điện thoại qua LAN đã được nhóm nghiệm thu.
+- **Issue / PR / bằng chứng:** PR #3 đã merge. `frontend/src/App.tsx` và `api.ts` có latest/history/state/command; 5/5 tests gồm telemetry, sensor error, ON→applied và OFF; production build PASS; M1 Web/LAN được chấp nhận ngày 2026-09-29.
 
 ### C-W1-02 — Hoàn thiện responsive và kiểm tra smartphone LAN
 
@@ -34,8 +34,8 @@ Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command 
 - **Đầu ra:** Dashboard responsive; checklist IP LAN, hotspot/Wi-Fi, frontend `/api` proxy và trạng thái mất kết nối.
 - **Tiêu chí nghiệm thu:** Điện thoại thật cùng LAN mở được dashboard bằng IP laptop, xem telemetry đã lưu và theo dõi command tới kết quả ACK/state; layout và thao tác không yêu cầu desktop.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** `[x] DONE` cho M1 Web/LAN — responsive CSS/mobile breakpoint đã có và browser điện thoại thật đã được kiểm tra qua LAN.
+- **Issue / PR / bằng chứng:** `frontend/src/styles.css`; production build PASS; nhóm nghiệm thu M1 Web/LAN ngày 2026-09-29. Android app/Capacitor thuộc M1.5 và chưa làm.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 
@@ -50,8 +50,8 @@ Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều k
 - **Đầu ra:** UI lịch sử, stale/offline, lỗi cảm biến, phản hồi lệnh.
 - **Tiêu chí nghiệm thu:** Hiển thị đơn vị/thời gian; sensor lỗi không hiện 0; không báo bật thành công chỉ vì HTTP thành công.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** `[~] IN PROGRESS` — history sparkline, stale/simulated, sensor error và device/relay state đã implement/test; chưa có ESP32 thật.
+- **Issue / PR / bằng chứng:** `frontend/src/App.tsx`, `frontend/src/App.test.tsx`; 5/5 tests PASS ngày 2026-09-29.
 
 ### C-W2-02 — Hoàn thiện UI command và ACK thiết bị thật
 

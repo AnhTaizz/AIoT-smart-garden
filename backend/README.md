@@ -1,6 +1,6 @@
 # Backend
 
-Trạng thái: B-W1-01 và B-W1-02 đã triển khai theo bản đề xuất v1 cho G02, chờ Toản (C) review và chờ nhóm chốt contract. Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
+Trạng thái: B-W1-01 và B-W1-02 đã merge vào `main` qua PR #2. Audit 2026-09-29 chạy toàn bộ backend unit + E2E trên PostgreSQL/Mosquitto thật: **84/84 pass**, không skip. Payload MQTT và REST theo [INTERFACES](../docs/INTERFACES.md); G02 đã **AGREED** và M1 Web/LAN đã được nhóm nghiệm thu.
 
 FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 
@@ -77,7 +77,7 @@ Telemetry trùng `device_id` + `boot_id` + `sequence` bị **bỏ qua im lặng*
 | --- | --- | --- |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_CONNECT_TIMEOUT_SECONDS` | Compose cung cấp | Không đặt thông tin thật trong Git |
 | `MQTT_HOST`, `MQTT_PORT` | `mosquitto`, `1883` | `MQTT_USERNAME`/`MQTT_PASSWORD` nếu broker yêu cầu |
-| `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng; giá trị nháp chờ G02 |
+| `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng theo G02 đã AGREED |
 | `COMMAND_MAX_DURATION_SECONDS` | 120 | Chỉ kiểm tra input; thiết bị vẫn giữ giới hạn bơm riêng |
 | `TELEMETRY_STALE_SECONDS` | 30 | Ngưỡng `stale` cho `/latest` và `/state` |
 

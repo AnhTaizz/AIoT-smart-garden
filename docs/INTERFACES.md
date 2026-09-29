@@ -1,10 +1,12 @@
-# Thỏa thuận giao tiếp — Bản nháp cho G02
+# Thỏa thuận giao tiếp — G02 AGREED
 
-Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Bản đề xuất cụ thể để chốt nằm ở mục [Bản đề xuất v1 của Tài (B)](#bản-đề-xuất-v1-của-tài-b--chờ-nhóm-chốt-ở-g02) cuối file. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. Tài (B) chủ trì, Thành (A) và Toản (C) cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR. Implementation tham chiếu trên draft PR #2 đã được kiểm tra tại `6ba6eb46`; xem [bản ghi regression và bàn giao](PR2_TEST_HANDOFF_2026-09-26.md). Bằng chứng này không thay cho xác nhận G02 hoặc nghiệm thu M1.
+Trạng thái: **AGREED — Thành (A), Tài (B), Toản (C) xác nhận ngày 2026-09-29**. Contract v1 nằm ở mục [Contract v1 đã thống nhất](#contract-v1-đã-thống-nhất) cuối file. Schema/payload/QoS/error rules đã được implement trong backend/simulator và PR #2 đã merge vào `main`; audit 2026-09-29 có backend 84/84 và simulator 31/31 tests pass. M1 Web/LAN cũng đã được nhóm nghiệm thu riêng; lịch sử regression nằm trong [PR2 test handoff](PR2_TEST_HANDOFF_2026-09-26.md).
 
 ## Ranh giới xử lý
 
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
+
+Frontend hiện hành là một codebase ReactJS cho web và, sau khi workstream Android được triển khai, cùng production build được đóng gói bằng Capacitor. Browser/Android đều đi qua REST/WebSocket của FastAPI; frontend không publish/subscribe MQTT trực tiếp. WebSocket chưa implement, nên behavior hiện tại là REST polling.
 
 ## Luồng bắt buộc của M1
 
@@ -20,9 +22,9 @@ Hai luồng phải chạy trên cùng phiên bản và cùng `device_id`. Kiểm
 
 ## MQTT cho M1
 
-Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống nhất trong M1, còn chi tiết payload phải được cả 3 thành viên (Thành, Tài, Toản) xác nhận ở G02:
+Giữ bốn topic hiện tại cho `node_01`; topic path và chi tiết payload đã được cả 3 thành viên (Thành, Tài, Toản) xác nhận ở G02:
 
-| Luồng | Topic M1 | Nội dung tối thiểu cần xác nhận |
+| Luồng | Topic M1 | Nội dung G02 đã xác nhận |
 | --- | --- | --- |
 | Telemetry | garden/node_01/telemetry | device_id, boot_id/sequence nếu khử trùng, thời gian đo, giá trị/đơn vị, sensor_status, mode, relay_state |
 | Command | garden/node_01/control | command_id, hành động, tham số, thời hạn; quy tắc kiểm tra tính hợp lệ |
@@ -31,7 +33,7 @@ Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống 
 
 - Chốt QoS và retained cho từng topic. Không giữ retained lệnh bật bơm để thiết bị chạy lại lệnh cũ khi kết nối.
 - Lệnh có ID để nhận biết trùng; nhận lại cùng ID không kéo dài giới hạn chạy. Chốt cửa sổ lưu ID và hành vi qua khởi động lại.
-- Chốt cách từ chối lệnh hết hạn và xử lý khi đồng hồ thiết bị chưa đồng bộ. TTL không thay thế giới hạn thời gian chạy cục bộ.
+- Dùng `expires_at` tuyệt đối để từ chối lệnh hết hạn và xử lý khi đồng hồ thiết bị chưa đồng bộ; không dùng TTL tương đối. Hạn command không thay thế giới hạn thời gian chạy cục bộ.
 - Backend/UI phân biệt yêu cầu đã gửi, thiết bị chấp nhận và trạng thái được áp dụng. ACK không chứng minh có dòng nước thật.
 - Chốt ngưỡng xác định dữ liệu cũ/offline, cách lưu bản tin tới trễ và thứ tự bản tin.
 
@@ -41,13 +43,13 @@ Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống 
 2. HTTP 2xx chỉ có nghĩa backend đã nhận request; frontend tiếp tục hiển thị `pending`, không báo thiết bị đã thực hiện.
 3. Simulator nhận command và gửi ACK có cùng `command_id`. ACK `accepted` vẫn là trạng thái chờ; ACK `rejected` chuyển backend sang `rejected` và giữ lý do.
 4. Khi áp dụng lệnh, simulator gửi ACK `applied` và state có `last_command_id` tương ứng cùng trạng thái thực tế. Backend chỉ chuyển sang `applied` khi thông tin nhận được khớp command.
-5. Nếu không có kết quả cuối trong thời hạn đã chốt, backend chuyển sang `timeout`. ACK tới trễ phải được ghi nhận nhưng không được làm UI âm thầm báo thành công; cách hòa giải chi tiết chốt ở G02.
+5. Nếu không có kết quả cuối trong thời hạn đã chốt, backend chuyển sang `timeout`. ACK tới trễ phải được ghi nhận nhưng không được làm UI âm thầm báo thành công; cách hòa giải chi tiết tuân theo contract G02 bên dưới.
 
 Backend và API phục vụ UI phải phân biệt tối thiểu bốn trạng thái `pending`, `applied`, `rejected`, `timeout`. Frontend hiển thị trạng thái backend trả về, không suy luận thành công từ mã HTTP của request tạo command.
 
 ## Dữ liệu và điều khiển
 
-| Nội dung | Quyết định cần điền ở G02 |
+| Nội dung | Quyết định G02 |
 | --- | --- |
 | Thời gian | Chọn chuẩn UTC, độ chính xác, thời điểm nhận ở server và cách xử lý thời gian đo chưa hợp lệ |
 | Đơn vị | Nhiệt độ °C, độ ẩm không khí %, đất là % tương đối sau hiệu chuẩn; giữ ADC phục vụ đánh giá khi cần |
@@ -84,9 +86,9 @@ Tuần 1 dùng polling đơn giản hoặc cơ chế nhóm quen thuộc; chốt 
 
 Toản (C) bàn giao Tài (B): artifact model, preprocessing, danh sách nhãn, inference mẫu, phiên bản dataset/model, dependency, kích thước ảnh và lỗi đầu vào. Tài trả kết quả gắn image_id và model_version. HSV trả độ phủ xanh riêng; model phân loại trả nhãn/điểm mô hình riêng. Không tự gọi điểm mô hình là xác suất đã hiệu chuẩn.
 
-## Bản đề xuất v1 của Tài (B) — chờ nhóm chốt ở G02
+## Contract v1 đã thống nhất
 
-Trạng thái mục này: **DRAFT**. Backend và simulator trong nhánh `feat/B-W1-backend-telemetry-command` đã triển khai đúng các quy tắc dưới đây để nhóm có thứ cụ thể kiểm tra, nhưng chưa ai xác nhận. Thành (A) xem phần thiết bị, Toản (C) xem phần REST/UI; mọi thay đổi phải sửa cả mục này và code trong cùng PR.
+Trạng thái mục này: **AGREED** ngày 2026-09-29. Backend và simulator trong nhánh lịch sử `feat/B-W1-backend-telemetry-command` đã triển khai các quy tắc dưới đây; Thành (A) đã xác nhận phần thiết bị, Toản (C) phần REST/UI và Tài (B) phần backend. Mọi thay đổi sau mốc này phải được nhóm thống nhất và sửa cả mục này lẫn code liên quan trong cùng PR.
 
 ### 1. Quy ước chung
 
@@ -557,7 +559,7 @@ Vì `pump_on` chỉ được thực thi khi thiết bị kiểm tra được `ex
 
 Phân trang bằng con trỏ cho history; AUTO và API cấu hình (M3); khử trùng theo thời gian đến trễ; xác thực API/MQTT; ảnh và inference (M4); WebSocket nếu polling thực sự không đủ.
 
-### 13. Điều kiện để đổi mục này thành AGREED
+### 13. Bằng chứng G02 AGREED
 
 | Điều kiện | Trạng thái |
 | --- | --- |
@@ -566,13 +568,13 @@ Phân trang bằng con trỏ cho history; AUTO và API cấu hình (M3); khử t
 | Thứ tự kiểm tra của thiết bị và quy tắc backend | có |
 | Bảng reason ghi rõ bên phát | có |
 | Sáu endpoint REST kèm mẫu response và bảng mã lỗi | có |
-| Thành (A) xác nhận thiết bị/firmware làm được | **chưa** |
-| Toản (C) xác nhận REST/UI đủ dữ liệu | **chưa** |
-| Tài (B) xác nhận backend đúng bản này | **chưa** |
-| Ghi tên, ngày và link PR ở mục Xác nhận; đổi DRAFT → AGREED trong PR có cả ba approve | **chưa** |
+| Thành (A) xác nhận thiết bị/firmware làm được | **có** |
+| Toản (C) xác nhận REST/UI đủ dữ liệu | **có** |
+| Tài (B) xác nhận backend đúng bản này | **có** |
+| Ghi tên và ngày ở mục Xác nhận; đổi DRAFT → AGREED | **có** |
 
-G02 AGREED là điều kiện đi trước và **không** đồng nghĩa M1 PASS. M1 PASS vẫn theo đúng checklist trong [ROADMAP](ROADMAP.md): cần một phiên end-to-end có telemetry lên UI, command quay về thiết bị, và điện thoại thật mở dashboard qua IP LAN.
+G02 AGREED và M1 PASS là hai quyết định riêng. Ngày 2026-09-29, nhóm đã xác nhận G02 AGREED và nghiệm thu M1 Web/LAN sau phiên end-to-end có telemetry lên UI, command quay về simulator bằng ACK/state, và điện thoại thật mở dashboard qua IP LAN. M1 không phụ thuộc Capacitor; Android packaging thuộc M1.5.
 
 ## Xác nhận
 
-Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2).
+Thành (A): xác nhận ngày 2026-09-29. Tài (B): xác nhận ngày 2026-09-29. Toản (C): xác nhận ngày 2026-09-29. Implementation reference: [PR #2 — đã merge](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2).

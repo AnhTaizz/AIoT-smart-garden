@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { resolveApiBaseUrl } from "./apiConfig";
+
 export type BackendStatus = "checking" | "online" | "offline";
 export type DatabaseStatus =
   | "checking"
@@ -117,8 +120,25 @@ export class ApiError extends Error {
   }
 }
 
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "/api";
-const apiBaseUrl = configuredBaseUrl.replace(/\/$/, "");
+const apiBaseUrl = resolveApiBaseUrl(
+  import.meta.env, window.location.protocol, Capacitor.isNativePlatform(),
+);
+
+async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const externalSignal = init.signal;
+  const abort = () => controller.abort();
+  if (externalSignal?.aborted) abort();
+  externalSignal?.addEventListener("abort", abort, { once: true });
+  const timeout = window.setTimeout(abort, 10000);
+  try {
+    // No automatic POST retry: an interrupted response may already have published ON.
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abort);
+  }
+}
 
 export interface ChatTurn {
   role: "user" | "assistant";
@@ -243,7 +263,7 @@ export async function fetchSystemStatus(
 
 async function checkBackend(signal?: AbortSignal): Promise<BackendStatus> {
   try {
-    const response = await fetch(`${apiBaseUrl}/health`, {
+    const response = await apiFetch(`${apiBaseUrl}/health`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -262,7 +282,7 @@ async function checkBackend(signal?: AbortSignal): Promise<BackendStatus> {
 
 async function checkDatabase(signal?: AbortSignal): Promise<DatabaseStatus> {
   try {
-    const response = await fetch(`${apiBaseUrl}/ready`, {
+    const response = await apiFetch(`${apiBaseUrl}/ready`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -294,7 +314,7 @@ export async function fetchLatestTelemetry(
   signal?: AbortSignal,
 ): Promise<TelemetryData | null> {
   try {
-    const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/latest`, {
+    const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/latest`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -321,7 +341,7 @@ export async function fetchTelemetryHistory(
 ): Promise<TelemetryData[]> {
   try {
     const url = `${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/telemetry?limit=${limit}&order=${order}`;
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -346,7 +366,7 @@ export async function fetchDeviceState(
   signal?: AbortSignal,
 ): Promise<DeviceStateData | null> {
   try {
-    const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/state`, {
+    const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/state`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -376,7 +396,7 @@ export async function sendCommand(
     body.duration_seconds = durationSeconds;
   }
 
-  const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands`, {
+  const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -393,7 +413,7 @@ export async function fetchCommand(
   commandId: string,
   signal?: AbortSignal,
 ): Promise<CommandOut> {
-  const response = await fetch(`${apiBaseUrl}/commands/${encodeURIComponent(commandId)}`, {
+  const response = await apiFetch(`${apiBaseUrl}/commands/${encodeURIComponent(commandId)}`, {
     signal,
     cache: "no-store",
     headers: { Accept: "application/json" },
@@ -408,7 +428,7 @@ export async function fetchRecentCommands(
   signal?: AbortSignal,
 ): Promise<CommandOut[]> {
   try {
-    const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands?limit=${limit}`, {
+    const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands?limit=${limit}`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },

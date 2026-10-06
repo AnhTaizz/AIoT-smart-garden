@@ -281,12 +281,16 @@ export default function App() {
 
     const commandId = activeCommand.command_id;
     let cancelled = false;
+    let consecutiveFailures = 0;
+    const controller = new AbortController();
 
     const poll = async () => {
       try {
-        const updated = await fetchCommand(commandId);
+        const updated = await fetchCommand(commandId, controller.signal);
         if (cancelled) return;
 
+        consecutiveFailures = 0;
+        setActionError(null);
         setActiveCommand(updated);
 
         // Update in recent list
@@ -324,6 +328,13 @@ export default function App() {
           setActionError(
             err instanceof Error ? err.message : "Lỗi khi kiểm tra kết quả lệnh.",
           );
+          // Retry only status reads, with a bound. Refresh resumes after exhaustion.
+          consecutiveFailures += 1;
+          if (consecutiveFailures < 5) {
+            commandPollRef.current = window.setTimeout(poll, COMMAND_POLL_INTERVAL_MS);
+          } else {
+            setActionError("Mất kết nối khi theo dõi lệnh. Nhấn Làm mới để kiểm tra lại; không tự gửi lại lệnh.");
+          }
         }
       }
     };
@@ -332,11 +343,12 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       if (commandPollRef.current) {
         window.clearTimeout(commandPollRef.current);
       }
     };
-  }, [activeCommand, deviceId]);
+  }, [activeCommand, deviceId, refreshKey]);
 
   // Handle send command
   const handleSendCommand = async (action: CommandAction) => {

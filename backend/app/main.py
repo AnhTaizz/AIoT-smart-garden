@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from . import repository
 from .chat import CHAT_ERRORS, router as chat_router
 from .config import Settings
+from .http_config import configure_cors
 from .db import apply_migrations, create_pool
 from .ingest import MessageHandler, consume
 from .mqtt_bridge import QUEUE_SIZE, MqttBridge
@@ -130,6 +131,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Smart Garden API", lifespan=lifespan)
 app.include_router(chat_router)
+configure_cors(app, Settings.from_env())
 
 
 @app.exception_handler(psycopg.Error)

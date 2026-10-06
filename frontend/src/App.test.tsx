@@ -366,3 +366,41 @@ describe("Dashboard", () => {
     });
   });
 });
+
+
+describe("Remote command lifecycle", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it.each([
+    ["timeout", null, /Quá thời hạn phản hồi/],
+    ["rejected", "clock_unsynced", /Thiết bị chưa đồng bộ giờ UTC/],
+  ])("shows backend %s without reporting applied", async (status, reason, message) => {
+    vi.stubGlobal("fetch", setupMockFetch({"GET /command": {
+      command_id: "cmd-uuid-1234", device_id: "node_01", action: "pump_on",
+      params: {duration_seconds: 10}, status, reason, device_ack: null,
+    }}));
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
+    await waitFor(() => expect(screen.getByText(message as RegExp)).toBeInTheDocument(), {timeout: 3000});
+    expect(screen.queryByText(/Thiết bị đã bật bơm thành công/)).not.toBeInTheDocument();
+  });
+
+  it("recovers command status after network loss without sending ON twice", async () => {
+    let reads = 0;
+    const base = setupMockFetch();
+    const mock = vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/commands/cmd-uuid-1234") && ++reads === 1) {
+        return Promise.reject(new TypeError("temporary network loss"));
+      }
+      return base(url, init);
+    });
+    vi.stubGlobal("fetch", mock);
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
+    await waitFor(() => expect(screen.getByText(/Thiết bị đã bật bơm thành công/)).toBeInTheDocument(), {timeout: 4000});
+    expect(reads).toBe(2);
+    expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+});

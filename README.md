@@ -1,8 +1,17 @@
-# Smart Garden — Kế hoạch triển khai 7 tuần
+# AIoT Smart Garden
 
-Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` hiện có khung hạ tầng development và dashboard React cơ bản. [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2) đã triển khai backend/simulator hai chiều gồm MQTT ingest, PostgreSQL, latest/history API và command/ACK/state; phần này chưa merge, còn frontend telemetry/command và phiên smartphone LAN vẫn chưa có.
+Bộ tài liệu và source cho dự án nhóm 3 người. G02 đã **AGREED**, M1 Web/LAN đã được nhóm nghiệm thu và M1.5A đã build được Android debug APK ngày 2026-09-30. Ngày 2026-10-06, người dùng xác nhận Mobile App Android thật qua 4G/5G PASS: telemetry/state, pump ON/OFF và Web/App đồng bộ ACK + state. iOS architecture/config READY, build/runtime NOT TESTED; firmware ESP32, camera và AI còn mở. Xem trạng thái có bằng chứng trong [PROJECT_STATE](docs/PROJECT_STATE.md) và kế hoạch sống trong [ROADMAP](docs/ROADMAP.md).
 
-Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
+Demo chính là **REMOTE WEB + CAPACITOR qua Cloudflare Quick Tunnel**: Web/mobile browser dùng HTTPS frontend; app Android/iOS đóng gói React bằng Capacitor và gọi trực tiếp HTTPS backend. User có thể dùng 4G/5G, không cần cùng Wi-Fi với laptop. Laptop vẫn chạy FastAPI, Mosquitto và PostgreSQL; ESP32 -> Mosquitto vẫn dùng LAN thiết bị. Không public broker hoặc database; không deploy production cloud.
+
+```text
+Browser --HTTPS--> Cloudflare frontend -> React/Nginx -> /api -> FastAPI
+React + Capacitor (Android/iOS) --HTTPS--> Cloudflare backend -> FastAPI
+FastAPI <-> Mosquitto <-> ESP32/simulator (telemetry/control/ACK/state)
+FastAPI -> PostgreSQL
+```
+
+**Mobile App** là ứng dụng Capacitor Android/iOS; **Mobile Browser** là truy cập bằng browser/PWA (repo chưa implement PWA). Hướng dẫn chạy mới, cấu hình mobile và test 4G/5G: [REMOTE_DEMO](docs/REMOTE_DEMO.md). Báo cáo nghiệm thu ở [REMOTE_MOBILE_REPORT](docs/REMOTE_MOBILE_REPORT_2026-10-06.md); không coi build PASS là phone runtime PASS.
 
 ## Bắt đầu từ đâu?
 
@@ -18,21 +27,22 @@ Một khu vực trồng thử nghiệm, ESP32, cảm biến đất Capacitive v1
 
 Mục tiêu bắt buộc: giám sát, lưu lịch sử, điều khiển Manual/Auto từ laptop hoặc điện thoại, tưới có giới hạn và xử lý lỗi cơ bản. Phải hoàn thành luồng IoT end-to-end trước khi tích hợp AI. ESP32-CAM và một bài toán AI baseline nhỏ có đánh giá bắt đầu ở tuần 4; độ phủ xanh bằng HSV là baseline xử lý ảnh, không được gọi là mô hình ML đã huấn luyện. Weather API, nhiều khu vực trồng và tối ưu nâng cao không thuộc core scope.
 
-## Kiến trúc demo local mobile
+## Kiến trúc hiện hành
 
 ```text
-Điện thoại ──HTTP qua Wi-Fi/hotspot──> IP LAN laptop:5173
-                                            │
-                                            ▼
-                                      React / Nginx
-                                            │ /api
-                                            ▼
-ESP32 ──MQTT qua Wi-Fi/hotspot──> Mosquitto → FastAPI → PostgreSQL
-                                            │
-                                            └── command → ESP32 → ACK/state
+ESP32 / ESP32-CAM ──MQTT──> Mosquitto ──> FastAPI ──> PostgreSQL
+                                ^              │
+                                │              └── REST / WebSocket
+                                │                         │
+                                └──── command <───────────+── ReactJS web
+                                                          └── ReactJS build
+                                                              + Capacitor
+                                                              + Android APK
 ```
 
-React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng Docker Compose. Điện thoại chỉ cần truy cập dashboard; frontend proxy API trong mạng Docker. ESP32 dùng IP LAN của laptop làm địa chỉ MQTT broker. Không dùng hostname Docker như `frontend`, `backend` hoặc `mosquitto` trên điện thoại/ESP32.
+Chỉ có **một frontend ReactJS**, thiết kế responsive/mobile-first. Browser dùng React/Nginx; Android/iOS dùng cùng React trong native container/WebView của Capacitor, với bundle mobile/API config riêng. Web build ở `dist/`, native build ở `dist-mobile/` để tránh sync nhầm `/api` của Web. Không dùng React Native, Flutter hoặc một native UI riêng. Frontend không giao tiếp MQTT trực tiếp và không sở hữu logic safety; mọi intent điều khiển đi qua FastAPI rồi MQTT tới ESP32.
+
+WebSocket nằm trong kiến trúc mục tiêu nhưng chưa được implement; frontend hiện dùng REST polling. ESP32 vẫn là nơi sở hữu Manual/Auto, relay, pump safety, local timeout và fail-safe.
 
 ## Các tài liệu
 
@@ -41,7 +51,7 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | [TEAM](docs/TEAM.md) | Ai chịu trách nhiệm, phối hợp và bàn giao gì |
 | [ROADMAP](docs/ROADMAP.md) | Phase, milestone, lịch 7 tuần và task chung |
 | [A-EMBEDDED](docs/assignments/A-EMBEDDED.md) | 14 task của Thành (Thiết bị và firmware / Embedded) |
-| [B-BACKEND](docs/assignments/B-BACKEND.md) | 14 task của Tài (Backend và dữ liệu) |
+| [B-BACKEND](docs/assignments/B-BACKEND.md) | Backend, integration và mobile packaging của Tài |
 | [C-FRONTEND-AI](docs/assignments/C-FRONTEND-AI.md) | 14 task của Toản (Frontend và AI) |
 | [INTERFACES](docs/INTERFACES.md) | Những thỏa thuận giao tiếp cần chốt trước tích hợp |
 | [WORKFLOW](docs/WORKFLOW.md) | Task, review, Git, GitHub và xử lý chậm tiến độ |
@@ -59,7 +69,7 @@ Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_re
 - Các cổng mặc định `1883`, `5432`, `8000`, `5173` chưa bị ứng dụng khác sử dụng; có thể đổi trong `.env`.
 - Python 3.10 trở lên và pip nếu chạy simulator trực tiếp trên host.
 - Node.js 22 và npm chỉ khi phát triển frontend ngoài Docker; build Compose đã chứa Node trong image.
-- Wi-Fi hoặc hotspot cho phép laptop, điện thoại và ESP32 nhìn thấy nhau; firewall của laptop cho phép inbound TCP `5173` và `1883` trên mạng riêng khi demo.
+- ESP32 và laptop cần mạng thiết bị cho MQTT LAN; user/điện thoại truy cập HTTPS Cloudflare từ Internet. Firewall chỉ cần inbound MQTT `1883` trên mạng thiết bị tin cậy. Hướng LAN frontend bên dưới là legacy.
 
 Trên Windows dùng Docker Desktop với WSL2 integration nếu chạy lệnh từ WSL. Tất cả cấu hình hiện tại chỉ dành cho development local, không dùng làm cấu hình production.
 
@@ -89,7 +99,7 @@ Lệnh Compose mặc định ở trên là **development mode**: cả bốn cổ
 
 ## Địa chỉ truy cập
 
-| Thành phần | Development mode | LAN demo mode |
+| Thành phần | Development mode | LAN legacy (deprecated for user access) |
 | --- | --- | --- |
 | Dashboard | <http://127.0.0.1:5173> | `http://<IP_LAN_LAPTOP>:5173` |
 | Backend health/readiness | `http://127.0.0.1:8000/health`, `/ready` | Không expose trực tiếp; điện thoại dùng `/api/health`, `/api/ready` qua dashboard |
@@ -98,7 +108,7 @@ Lệnh Compose mặc định ở trên là **development mode**: cả bốn cổ
 
 Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong container frontend mới dùng hostname Docker `backend:8000`. Hostname `backend` chỉ phân giải trong mạng Compose, không phải địa chỉ nhập vào trình duyệt.
 
-## Chạy demo trên điện thoại
+## LAN legacy — DEPRECATED FOR USER ACCESS
 
 1. Cho laptop, điện thoại và ESP32 vào cùng một Wi-Fi/hotspot. Nên dùng hotspot riêng của nhóm thay vì mạng công cộng có client isolation.
 2. Tìm IP LAN của laptop:
@@ -119,6 +129,14 @@ Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong 
 7. Cấu hình ESP32 dùng `<IP_LAN_LAPTOP>` làm MQTT broker và `MQTT_PORT` làm cổng, mặc định `1883`.
 
 `compose.lan.yaml` chỉ thay port publishing của frontend và Mosquitto; frontend vẫn proxy `/api` tới FastAPI qua mạng Docker. File không chứa IP laptop, vì IP có thể đổi theo Wi-Fi/hotspot. Mosquitto hiện cho phép anonymous cho development/local demo tin cậy; tuyệt đối không dùng cấu hình này trên Wi-Fi công cộng hoặc public Internet. Nếu điện thoại không mở được dashboard, kiểm tra hai thiết bị có cùng subnet, client isolation và firewall trước khi sửa code.
+
+### M1.5 — Android/iOS app bằng Capacitor
+
+Capacitor/Android đã được người dùng nghiệm thu trên điện thoại thật qua 4G/5G ngày 2026-10-06 (**MANUAL DEVICE TEST**, không phải automated test): APK cài/chạy, gọi backend Cloudflare, telemetry/state, pump ON/OFF và ACK + state PASS. iOS architecture/config READY; build/runtime NOT TESTED. M1 Web/LAN đã DONE, không phụ thuộc Android packaging. B dùng production build của cùng frontend ReactJS do C phát triển; không tạo codebase mobile thứ hai.
+
+App Capacitor dùng API HTTPS trực tiếp của **backend tunnel**, cấu hình bằng `VITE_API_URL` trong `frontend/.env.mobile.local`; không dùng frontend tunnel hoặc IP LAN. `localhost` trên phone là chính phone. Web vẫn mặc định `/api` qua frontend tunnel. WebSocket chưa implement; cả hai dùng REST polling và giữ ACK + state semantics.
+
+Debug Android manifest hiện cho phép cleartext HTTP chỉ trong build type `debug` để test DEV/local LAN. Release không bật ngoại lệ này; production phải hướng tới HTTPS/WSS. Ưu tiên cài và test trên điện thoại Android thật qua USB debugging/`adb`; emulator là optional.
 
 Kiểm tra backend trên Linux/macOS/WSL:
 
@@ -173,7 +191,7 @@ python -m pip install -r .\requirements.txt
 python .\simulator.py --count 10 --interval 1
 ```
 
-Payload luôn có `simulated: true` và schema `telemetry-v1`. Simulator cũng subscribe command, gửi ACK/state và tự dừng bơm mô phỏng theo bản đề xuất G02. `INTERFACES.md` vẫn là DRAFT chờ cả nhóm xác nhận; dữ liệu simulator không phải số đo thật và không thay nghiệm thu ESP32/bơm. Cấu hình và cách kiểm tra nằm trong `simulator/README.md`.
+Payload luôn có `simulated: true` và schema `telemetry-v1`. Simulator cũng subscribe command, gửi ACK/state và tự dừng bơm mô phỏng theo contract G02 đã AGREED. M1 Web/LAN dùng simulator đã được nghiệm thu, nhưng dữ liệu simulator không phải số đo thật và không thay nghiệm thu ESP32/bơm ở M2. Cấu hình và cách kiểm tra nằm trong `simulator/README.md`.
 
 ## Dừng môi trường
 

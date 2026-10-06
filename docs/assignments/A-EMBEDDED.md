@@ -17,8 +17,8 @@ Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát 
 - **Đầu ra:** `simulator/`, payload telemetry theo G02 và hướng dẫn phát bản tin.
 - **Tiêu chí nghiệm thu:** Phát được ít nhất 10 bản tin hợp lệ có `device_id` và sequence; B-W1-01 lưu được chúng vào PostgreSQL; dữ liệu `simulated` được ghi rõ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Review/Test — simulator `telemetry-v1` và luồng lưu backend đã có trên nhánh G02; chờ Thành review contract và PR.
-- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2); ngày 2026-09-26 simulator unit 31/31 và E2E backend thật 33/33. Phiên trước đã gửi telemetry `simulated: true` qua MQTT và đọc lại từ REST/PostgreSQL. Xem [bản ghi kiểm thử](../PR2_TEST_HANDOFF_2026-09-26.md). Đây là bằng chứng phần mềm, không phải nghiệm thu phần cứng/M1.
+- **Trạng thái:** `[x] DONE` cho simulator reference; G02 đã AGREED.
+- **Issue / PR / bằng chứng:** PR #2 đã merge vào `main`. Audit 2026-09-29: simulator unit 31/31 và backend full suite 84/84 pass; E2E lưu/truy vấn 10 telemetry qua MQTT/PostgreSQL. Xem [bản ghi PR #2](../PR2_TEST_HANDOFF_2026-09-26.md). M1 Web/LAN đã được nhóm nghiệm thu; đây vẫn là bằng chứng phần mềm, không phải nghiệm thu ESP32.
 
 ### A-W1-02 — Simulator nhận command và báo trạng thái
 
@@ -27,8 +27,8 @@ Mục tiêu chung: simulator hoàn tất hai chiều M1 với backend/UI: phát 
 - **Đầu ra:** Subscribe `garden/node_01/control`; xử lý `command_id`; publish ACK và state trên hai topic tương ứng.
 - **Tiêu chí nghiệm thu:** Simulator nhận command, giữ nguyên `command_id`, gửi ACK `applied` hoặc `rejected` và state có `last_command_id`; lệnh trùng không khởi động lại bộ đếm; backend/UI quan sát đúng kết quả.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Review/Test — implementation tham chiếu đã có trên nhánh G02; chờ Thành review và G02 AGREED.
-- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2); ngày 2026-09-26 simulator thật nhận `pump_on` thành `applied/on`, fail-safe về `off` sau khi broker disconnect/reconnect và không bật lại khi phát lại ON cũ. Unit 31/31; xem [bản ghi kiểm thử](../PR2_TEST_HANDOFF_2026-09-26.md). Chưa kiểm tra ESP32/UI/smartphone.
+- **Trạng thái:** `[x] DONE` cho simulator/M1 — ACK/state/safety đã implement/test; G02 AGREED và M1 Web/LAN đã nghiệm thu.
+- **Issue / PR / bằng chứng:** PR #2 đã merge. Audit 2026-09-29: 31/31 unit tests, gồm disconnect khi ON → relay OFF/hủy timer và reconnect không replay ON trùng. Bản ghi broker thật: [PR2 test handoff](../PR2_TEST_HANDOFF_2026-09-26.md). Kiểm tra ESP32 thật thuộc M2.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 

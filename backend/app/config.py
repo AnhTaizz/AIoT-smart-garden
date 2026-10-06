@@ -26,6 +26,7 @@ class Settings:
     command_timeout_seconds: int
     command_max_duration_seconds: int
     telemetry_stale_seconds: int
+    cors_origins: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -46,6 +47,15 @@ class Settings:
                 "COMMAND_MAX_DURATION_SECONDS", 120
             ),
             telemetry_stale_seconds=_int_env("TELEMETRY_STALE_SECONDS", 30),
+            cors_origins=tuple(
+                origin.strip().rstrip("/")
+                for origin in os.getenv(
+                    "CORS_ORIGINS",
+                    "http://localhost:5173,http://127.0.0.1:5173,"
+                    "https://localhost,capacitor://localhost",
+                ).split(",")
+                if origin.strip()
+            ),
         )
 
     def database_connection_parameters(self) -> dict[str, Any]:

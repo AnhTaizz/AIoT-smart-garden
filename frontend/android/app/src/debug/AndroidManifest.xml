@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- DEV-only: allow the debug APK to call a FastAPI instance over local-LAN HTTP. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

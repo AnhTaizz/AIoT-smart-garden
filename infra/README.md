@@ -1,5 +1,8 @@
 # Hạ tầng
 
+> Quyết định user ngày 2026-10-06: demo chính qua **Cloudflare Quick Tunnel**; Web/mobile browser dùng Internet, Capacitor Android/iOS gọi HTTPS FastAPI trực tiếp. Giữ MQTT LAN cho ESP32. Giữ React + Capacitor, không tạo Expo. Xem [hướng dẫn remote](../docs/REMOTE_DEMO.md) và [báo cáo kiểm chứng](../docs/REMOTE_MOBILE_REPORT_2026-10-06.md). Các nghiệm thu M1 LAN/M1.5A phía dưới là lịch sử; không chứng minh runtime 4G/5G hoặc iOS.
+
+
 Trạng thái: có khung Docker Compose cho development; chưa có hạ tầng triển khai production.
 
 `compose.yaml` ở thư mục gốc chạy bốn service:
@@ -31,7 +34,7 @@ Base `compose.yaml` là development mode và chỉ bind localhost:
 | FastAPI | `8000` | Bind `127.0.0.1`; endpoint health/readiness |
 | Frontend | `5173` | Bind `127.0.0.1`; dashboard React qua Nginx |
 
-LAN demo dùng `compose.lan.yaml` để thay riêng port publishing của frontend và Mosquitto:
+**LAN legacy — DEPRECATED FOR USER ACCESS.** `compose.lan.yaml` giữ demo cũ, thay riêng port publishing của frontend và Mosquitto:
 
 ```bash
 docker compose -f compose.yaml -f compose.lan.yaml up --build -d
@@ -39,7 +42,7 @@ docker compose -f compose.yaml -f compose.lan.yaml up --build -d
 
 Khi đó điện thoại cùng LAN mở `http://<IP_LAN_LAPTOP>:5173`; ESP32 dùng `<IP_LAN_LAPTOP>:1883` làm broker. FastAPI và PostgreSQL vẫn bind localhost; Nginx gọi `http://backend:8000` trong mạng Compose và proxy `/api` cho điện thoại.
 
-Không hardcode IP laptop trong Compose hoặc frontend. Chỉ cho phép inbound `5173` và `1883` trên mạng Private; cấu hình anonymous hiện tại không được dùng trên Wi-Fi công cộng hoặc public Internet. Backend vẫn chưa kết nối MQTT; Mosquitto mới là nền tảng cho task tích hợp tiếp theo.
+Không hardcode IP laptop trong Compose hoặc frontend. Chỉ cho phép inbound `5173` và `1883` trên mạng Private; cấu hình anonymous hiện tại không được dùng trên Wi-Fi công cộng hoặc public Internet. Backend hiện đã subscribe telemetry/ACK/state và publish control qua Mosquitto; firmware ESP32 và security production vẫn chưa triển khai.
 
 Dừng container nhưng giữ dữ liệu PostgreSQL:
 
@@ -47,4 +50,4 @@ Dừng container nhưng giữ dữ liệu PostgreSQL:
 docker compose down
 ```
 
-ESP32/ESP32-CAM chạy firmware trên thiết bị, không chạy trong container. `docs/INTERFACES.md` vẫn là bản nháp và TASK-000B không chốt MQTT/API contract.
+ESP32/ESP32-CAM chạy firmware trên thiết bị, không chạy trong container. `docs/INTERFACES.md` hiện là G02 AGREED; TASK-000B chỉ là lịch sử bootstrap, không phải trạng thái contract hiện tại.

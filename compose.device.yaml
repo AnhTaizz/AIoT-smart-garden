@@ -1,0 +1,6 @@
+# Device network only: ESP32 -> Mosquitto on the trusted LAN.
+# Browser and Capacitor use HTTPS tunnels; frontend/API/DB stay on loopback.
+services:
+  mosquitto:
+    ports: !override
+      - "0.0.0.0:${MQTT_PORT:-1883}:1883"

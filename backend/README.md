@@ -1,6 +1,6 @@
 # Backend
 
-Trạng thái: B-W1-01 và B-W1-02 đã triển khai theo bản đề xuất v1 cho G02, chờ Toản (C) review và chờ nhóm chốt contract. Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
+Trạng thái: B-W1-01 và B-W1-02 đã merge vào `main` qua PR #2. Audit 2026-09-29 chạy toàn bộ backend unit + E2E trên PostgreSQL/Mosquitto thật: **84/84 pass**, không skip. Payload MQTT và REST theo [INTERFACES](../docs/INTERFACES.md); G02 đã **AGREED** và M1 Web/LAN đã được nhóm nghiệm thu.
 
 FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 
@@ -77,7 +77,7 @@ Telemetry trùng `device_id` + `boot_id` + `sequence` bị **bỏ qua im lặng*
 | --- | --- | --- |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_CONNECT_TIMEOUT_SECONDS` | Compose cung cấp | Không đặt thông tin thật trong Git |
 | `MQTT_HOST`, `MQTT_PORT` | `mosquitto`, `1883` | `MQTT_USERNAME`/`MQTT_PASSWORD` nếu broker yêu cầu |
-| `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng; giá trị nháp chờ G02 |
+| `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng theo G02 đã AGREED |
 | `COMMAND_MAX_DURATION_SECONDS` | 120 | Chỉ kiểm tra input; thiết bị vẫn giữ giới hạn bơm riêng |
 | `TELEMETRY_STALE_SECONDS` | 30 | Ngưỡng `stale` cho `/latest` và `/state` |
 
@@ -123,11 +123,25 @@ docker run --rm --network smart-garden_default -v "$PWD/backend:/src" -w /src \
 
 Trên Git Bash (Windows) thêm `MSYS_NO_PATHCONV=1` và dùng `$(pwd -W)/backend`. E2E dùng `device_id` ngẫu nhiên `e2e_xxxxxxxx` nên không lẫn dữ liệu demo `node_01`. `tests/e2e/test_backend_e2e.py` là nghiệm thu B-W1; `tests/e2e/test_g02_contract.py` là các quy tắc G02 (bằng chứng state, boot/reboot, thứ tự command, dedup, thân lỗi).
 
+## Cloudflare / CORS
+
+Backend public độc lập qua Quick Tunnel trỏ tới `http://127.0.0.1:8000`. `CORS_ORIGINS` là comma-separated allow-list: local browser, Android `https://localhost`, iOS `capacitor://localhost`; thêm đúng frontend tunnel origin khi Web gọi backend khác origin. Không wildcard, không credentials. CORS không thay authentication. Same-origin Web `/api` không cần thêm tunnel origin.
+
+Uvicorn giữ mặc định chỉ trust proxy loopback, không dùng `--forwarded-allow-ips=*`. Cloudflared chạy trên host; Nginx chuyển forwarded headers cho API proxy. Services không redirect/generate absolute public URLs nên HTTPS được terminate ở Cloudflare mà không đổi command contract.
+
+Chạy đầy đủ unit/E2E và simulator trên stack thật, không đưa DB password vào command line:
+
+```powershell
+docker compose -f compose.yaml -f compose.device.yaml -f compose.test.yaml --profile tests run --build --rm regression-tests
+```
+
+Chi tiết: [REMOTE_DEMO](../docs/REMOTE_DEMO.md).
+
 ## Ranh giới và hạn chế đã biết
 
 - Backend không chạy logic tự tưới song song với ESP32; chỉ kiểm tra, chuyển lệnh và lưu kết quả.
 - Bản tin đến khi PostgreSQL đang down bị log lỗi và bỏ qua (không buffer lâu dài); command khi DB down trả 503 và không được publish.
 - MQTT subscriber dùng clean session: ACK/state gửi lúc backend tắt sẽ mất, command khi đó về `timeout`.
 - Backend học `boot_id` từ state nên một state của boot chưa từng thấy luôn được coi là boot mới; không có thứ tự tuyệt đối giữa hai boot chưa biết.
-- Chưa có xác thực API/MQTT (chỉ dùng trong LAN tin cậy, xem `compose.lan.yaml`).
+- Chưa có xác thực API/MQTT. Quick Tunnel là demo tạm: ai biết backend/frontend URL có thể gọi API control. Không public MQTT hoặc DB; CORS không phải authorization.
 - Chưa kiểm tra với ESP32 thật; đồng bộ giờ cho ESP32 là đầu việc trước M2 (xem `docs/INTERFACES.md`).

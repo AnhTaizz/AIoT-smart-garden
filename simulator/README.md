@@ -1,9 +1,9 @@
 # Simulator
 
-Trạng thái: đã triển khai hai chiều theo bản đề xuất `v1` trong
-[`docs/INTERFACES.md`](../docs/INTERFACES.md), nhưng G02 vẫn là **DRAFT** chờ
-Thành, Tài và Toản xác nhận. Simulator là thiết bị tham chiếu cho M1, không thay
-thế kiểm thử ESP32, cảm biến, relay hoặc bơm thật.
+Trạng thái: đã triển khai hai chiều theo contract `v1` **G02 AGREED** trong
+[`docs/INTERFACES.md`](../docs/INTERFACES.md). M1 Web/LAN dùng simulator đã được
+nhóm nghiệm thu; simulator vẫn chỉ là thiết bị tham chiếu và không thay thế kiểm
+thử ESP32, cảm biến, relay hoặc bơm thật ở M2.
 
 `simulator.py` dùng cùng bốn topic với thiết bị:
 
@@ -116,5 +116,6 @@ python simulator.py --help
 
 Kiểm tra tích hợp cần stack Compose đang chạy. Sau khi simulator đã phát state,
 gửi `POST /devices/<id>/commands`, poll `GET /commands/<command_id>`, rồi kiểm
-tra `GET /devices/<id>/state` và telemetry history. Kết quả thành phần không
-được dùng để ghi M1 PASS khi UI và smartphone LAN thật chưa được kiểm tra.
+tra `GET /devices/<id>/state` và telemetry history. M1 chỉ được ghi PASS sau
+phiên đầy đủ qua UI và smartphone LAN; phiên này đã được nhóm nghiệm thu ngày
+2026-09-29. Các lần chạy sau vẫn phải giữ cùng tiêu chí khi cần regression.

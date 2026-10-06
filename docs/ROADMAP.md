@@ -1,6 +1,15 @@
 # AIoT Smart Garden — Project Roadmap
 
-Cập nhật theo audit repository ngày **2026-09-29**, tại `main` / `208bf772ae0d7b0399ba6520624944da3792f78b`. Đây là source of truth cho trạng thái và kế hoạch hiện hành. Các báo cáo bootstrap/PR có ngày trong tên là bằng chứng lịch sử, không thay thế trạng thái ở file này.
+## Trạng thái Cloudflare + Remote Mobile — 2026-10-06
+
+**MANUAL DEVICE TEST — User-confirmed on physical Android device (2026-10-06, Asia/Bangkok).** Người dùng xác nhận APK cài/chạy trên Android thật, tắt Wi-Fi và dùng 4G/5G; telemetry/state, pump ON/OFF, Web/App shared state và ACK + state lifecycle đều PASS. Đây là **USER-CONFIRMED MANUAL TEST**, không phải automated test; không suy ra phone browser 4G, network recovery, iOS hoặc phần cứng ESP32 đã được kiểm thử. iOS architecture/config READY; build/runtime NOT TESTED. Regression và kết luận đóng phase: [REMOTE_MOBILE_REPORT](REMOTE_MOBILE_REPORT_2026-10-06.md). Firmware/hardware, camera/AI và production deployment còn mở.
+
+**Các mục snapshot, milestone và priority ngày 2026-09-30 bên dưới được giữ như lịch sử; các nhãn Android BLOCKED và hướng phone LAN đã được thay thế bởi evidence/config remote ở trên.** User access hiện hành dùng Cloudflare HTTPS; ESP32 → Mosquitto LAN vẫn hợp lệ.
+
+> Quyết định user ngày 2026-10-06: demo chính qua **Cloudflare Quick Tunnel**; Web/mobile browser dùng Internet, Capacitor Android/iOS gọi HTTPS FastAPI trực tiếp. Giữ MQTT LAN cho ESP32. Giữ React + Capacitor, không tạo Expo. Xem [hướng dẫn remote](REMOTE_DEMO.md) và [báo cáo kiểm chứng](REMOTE_MOBILE_REPORT_2026-10-06.md). Các nghiệm thu M1 LAN/M1.5A phía dưới là lịch sử; không chứng minh runtime 4G/5G hoặc iOS.
+
+
+Cập nhật theo implementation M1.5A ngày **2026-09-30**, bắt đầu tại `main` / `e1219cf7afe5f0709897a6b7c619cb03def36d0f`. Đây là source of truth cho trạng thái và kế hoạch hiện hành. Các báo cáo bootstrap/PR có ngày trong tên là bằng chứng lịch sử, không thay thế trạng thái ở file này.
 
 ## 1. Quy ước trạng thái
 
@@ -22,7 +31,7 @@ Không nâng milestone chỉ từ tên branch, tài liệu thiết kế, HTTP `2
 | Reference simulator | `[x] DONE` | Bốn topic v1; chống replay/trùng; OFF ưu tiên; fail-safe khi mất MQTT; 31/31 unit tests pass | Không thay thế firmware/phần cứng thật |
 | Embedded / hardware | `[ ] TODO` | `firmware/` chỉ có README | Firmware ESP32, sensor, relay/bơm, clock sync, reconnect và test phần cứng thật |
 | ReactJS web | `[x] DONE` cho MVP M1 | PR #3 đã merge; telemetry/history, device state, pump command lifecycle, responsive CSS; 5/5 tests, production build và M1 browser/LAN E2E đã được nghiệm thu | Mode control, auth, WebSocket và camera/AI thật là phạm vi sau M1 |
-| M1.5 — Android Packaging & Mobile Integration | `[ ] TODO / NEXT` | Node/npm và React build đã được xác minh; chưa có dependency/config/platform Android trong repo | Capacitor, Android toolchain, cài/chạy trên điện thoại thật và APK |
+| M1.5 — Android Packaging & Mobile Integration | `[!] BLOCKED` | M1.5A PASS: Capacitor 8.5.2, persistent SDK, Android platform, cap sync, Gradle debug build, APK 4.08 MiB; Docker/LAN telemetry PASS từ laptop | Chờ physical phone để install/launch và xác nhận FastAPI LAN, telemetry, command, ACK/state trên app |
 | Camera / AI | `[ ] TODO` | `ai/` và camera UI mới là mô tả/placeholder | ESP32-CAM, image API, dataset, baseline, evaluation và UI kết quả |
 | End-to-end integration | `[x] DONE` cho M1 Web/LAN | Nhóm đã nghiệm thu React → FastAPI → MQTT/Mosquitto → simulator → ACK/state → React trên browser điện thoại qua LAN | M1.5 Android app và M2+ phần cứng vẫn chưa làm |
 
@@ -32,8 +41,8 @@ Không nâng milestone chỉ từ tên branch, tài liệu thiết kế, HTTP `2
 - Backend: `python -m pytest -v tests` trong network Compose — **84 passed**, không skip; cảnh báo duy nhất là test container không ghi được pytest cache vào bind mount.
 - Simulator: `python -m unittest discover -s tests -v` — **31 passed**.
 - Frontend: `npm test` — **5 passed**; `npm run build` — PASS.
-- Compose: build/start PASS; PostgreSQL, Mosquitto, backend và frontend đều healthy; `/health` và `/ready` trả trạng thái hợp lệ.
-- M1 đã được nhóm nghiệm thu trên browser điện thoại qua LAN; chưa có bằng chứng **app Android/Capacitor** chạy trên điện thoại thật, ESP32 thật, relay/bơm thật, ESP32-CAM hoặc APK.
+- Compose: build/start PASS; PostgreSQL, Mosquitto, backend và frontend đều healthy; `/health` và `/ready` trả trạng thái hợp lệ. Phiên M1.5 ngày 2026-09-30 còn xác minh Nginx `/api` qua IP Wi-Fi runtime, simulator gửi 10 telemetry và latest/history/state đều đọc lại được từ laptop.
+- M1 đã được nhóm nghiệm thu trên browser điện thoại qua LAN; debug APK đã build nhưng chưa có bằng chứng **app Android/Capacitor** chạy trên điện thoại thật, ESP32 thật, relay/bơm thật hoặc ESP32-CAM.
 
 ## 3. Architecture Decision
 
@@ -71,7 +80,7 @@ Quyết định:
 ### Mobile networking
 
 - Trong app trên điện thoại, `http://localhost:8000` trỏ vào chính điện thoại, **không** trỏ vào FastAPI trên laptop.
-- Khi test LAN: điện thoại và laptop ở cùng Wi-Fi/hotspot; app dùng `http://<LAPTOP_LAN_IP>:<BACKEND_PORT>` hoặc cùng-origin proxy phù hợp. Không hard-code một IP laptop vào source/docs như giá trị cố định.
+- Khi test LAN: điện thoại và laptop ở cùng Wi-Fi/hotspot; với Compose hiện tại app ưu tiên `http://<LAPTOP_LAN_IP>:<FRONTEND_LAN_PORT>/api` qua Nginx proxy. Chỉ dùng cổng FastAPI trực tiếp nếu nó được expose có chủ đích. Không hard-code một IP laptop vào source/docs như giá trị cố định.
 - REST base URL hiện hỗ trợ `VITE_API_BASE_URL`. Khi WebSocket được triển khai, thêm cấu hình tương đương như `VITE_WS_BASE_URL` thay vì hard-code.
 - Nếu Android chặn cleartext HTTP, chỉ cho phép cleartext trong cấu hình **DEV/local LAN** có phạm vi hẹp. Production hướng tới HTTPS/WSS và không tắt security toàn cục.
 
@@ -143,31 +152,31 @@ Chi tiết payload, validation và REST nằm trong [INTERFACES](INTERFACES.md).
 
 ### Phase 4 / M1.5 — Android Packaging & Mobile Integration
 
-**Trạng thái: `[ ] TODO / NEXT`.** M1 Web/LAN đã DONE và không phụ thuộc Capacitor. M1.5 có thể nghiệm thu control flow bằng simulator qua Docker/LAN; không phải chờ ESP32 thật của M2. Capacitor setup phải bắt đầu sớm; không chờ tới tuần cuối.
+**Trạng thái: `[!] BLOCKED ON PHYSICAL DEVICE TEST`.** M1.5A packaging, SDK persistent và laptop-side Docker/LAN telemetry validation đã PASS; `adb devices -l` vẫn không có thiết bị nên chưa thể nghiệm thu app Android. M1 Web/LAN đã DONE và không phụ thuộc Capacitor. M1.5 có thể nghiệm thu control flow bằng simulator qua Docker/LAN; không phải chờ ESP32 thật của M2.
 
 - `[x]` Verify Node/npm environment — audit: Node `v24.13.0`, npm `11.6.2`.
 - `[x]` Verify current ReactJS frontend setup — 5 tests và production build pass.
-- `[ ]` Install/configure Capacitor trong frontend hiện tại.
-- `[ ]` Add Android platform.
+- `[x]` Install/configure Capacitor 8.5.2 trong frontend hiện tại; `webDir: dist`, app ID `com.aiot.smartgarden`, app name `Smart Garden`.
+- `[x]` Add Android platform tại `frontend/android/`.
 - `[ ]` Verify Android Studio — không tìm thấy trong audit machine.
-- `[ ]` Verify Android SDK — `ANDROID_HOME`/`ANDROID_SDK_ROOT` chưa set, common SDK path không tồn tại.
-- `[ ]` Verify Platform Tools / `adb` — command chưa có.
-- `[~]` Verify compatible JDK — JDK 21 được tìm thấy; chưa có Capacitor/Gradle project để chứng minh compatibility.
-- `[ ]` Verify Gradle/Android toolchain — chưa có Gradle wrapper/platform Android; system Gradle không bắt buộc nếu wrapper được tạo sau.
+- `[x]` Verify Android SDK — command-line SDK persistent tại `%LOCALAPPDATA%\Android\Sdk`, gồm Platform 36 + Build Tools 35.0.0; Gradle Wrapper build PASS. Android Studio vẫn optional/chưa cài.
+- `[x]` Verify Platform Tools / `adb` — 37.0.1 chạy được; không có connected device.
+- `[x]` Verify compatible JDK — JDK 21.0.8 chạy Gradle build PASS.
+- `[x]` Verify Gradle/Android toolchain — AGP 8.13.0 + Gradle Wrapper 8.14.3; không cần system Gradle.
 - `[x]` Build a minimal React app successfully — app hiện tại đã production-build thành công, vượt mức smoke test tối thiểu.
-- `[ ]` Sync React build into Capacitor.
-- `[ ]` Open Android project.
-- `[ ]` Verify USB debugging / `adb` và cài test build trên **điện thoại Android thật**.
-- `[ ]` Verify app can reach FastAPI qua IP LAN/config; không dùng `localhost` của điện thoại.
+- `[x]` Sync React build into Capacitor bằng `npm run android:sync`.
+- `[ ]` Open Android project trong Android Studio — IDE chưa cài; không chặn command-line build.
+- `[!]` Verify USB debugging / `adb` và cài test build trên **điện thoại Android thật** — không có thiết bị kết nối.
+- `[ ]` Verify app can reach FastAPI qua IP LAN/config và Nginx `/api` proxy; laptop-side LAN endpoint đã PASS nhưng chưa có bằng chứng từ app trên điện thoại.
 - `[ ]` Verify REST requests.
 - `[ ]` Verify WebSocket realtime sau khi backend/frontend có WebSocket.
 - `[ ]` Verify authentication nếu auth được đưa vào scope.
 - `[ ]` Verify pump control flow từ Android qua backend → MQTT → device.
 - `[ ]` Verify command ACK/state hiển thị đúng trên Android.
 - `[ ]` Verify telemetry/history, pump state và device/connection status hiển thị đúng trên Android.
-- `[ ]` Configure app name/icon.
+- `[~]` Configure app name/icon — app name `Smart Garden` đã có; icon hiện là asset mặc định của generated project.
 - `[ ]` Configure splash screen nếu cần.
-- `[ ]` Generate debug APK.
+- `[x]` Generate debug APK — `android/app/build/outputs/apk/debug/app-debug.apk`, 4.08 MiB; artifact được ignore. Build-time LAN URL được sync vào asset nhưng không hard-code vào source/Git.
 - `[ ]` Generate release APK khi release configuration/signing đã sẵn sàng; không commit secret/signing key.
 - `[ ]` Final demo trên điện thoại thật.
 
@@ -204,9 +213,9 @@ Tuần là mốc tương đối từ ngày nhóm bắt đầu; chưa có ngày l
 | Tuần | Trọng tâm | Trạng thái audit | Kế hoạch / điều kiện ra |
 | --- | --- | --- | --- |
 | 1 | Software M1: backend, simulator, React | `[x]` | G02 AGREED; backend/simulator và React đã merge; M1 Web/LAN E2E trên browser điện thoại đã được nhóm nghiệm thu. |
-| 2 | ESP32 thật + Android skeleton | `[ ]` | A đưa telemetry/control lên ESP32; B cài Capacitor/Android platform và mở project; C giữ UI responsive. Test LAN trên điện thoại thật ngay tuần này. |
+| 2 | ESP32 thật + Android skeleton | `[~]` | Android skeleton/debug APK đã build; A vẫn cần đưa telemetry/control lên ESP32, B cần cài APK và test LAN trên điện thoại thật, C giữ UI responsive. |
 | 3 | Manual/Auto + safety + mobile integration | `[ ]` | A hoàn thiện device state machine/fail-safe; B nối Android tới backend; C thêm mode/control UX. Test disconnect/replay/STOP trên phần cứng. |
-| 4 | Camera/AI baseline + debug APK | `[ ]` | A cung cấp ảnh thật; B image API và debug APK; C baseline + camera/AI UI. APK phải cài/mở/gọi REST được trước cuối tuần. |
+| 4 | Camera/AI baseline + Android integration | `[ ]` | Debug APK đã build sớm ở M1.5A; còn cài/mở/gọi REST trên phone, image API, dữ liệu ảnh và camera/AI UI. |
 | 5 | Full integration | `[ ]` | React MVP sync vào Capacitor; Android control/ACK-state; camera/AI tích hợp; đóng phạm vi. |
 | 6 | Hardening | `[ ]` | Test kéo dài, network failures, dependency/security audit, Android physical-device regression; release APK chỉ khi cấu hình sẵn sàng. |
 | 7 | Bàn giao | `[ ]` | Demo trên smartphone/ESP32 thật, README, report, slide, video, artifact/version và phương án hotspot dự phòng. |
@@ -238,7 +247,7 @@ G02/backend contract ổn định
 ### B — Tài — Backend + Integration + Mobile Packaging
 
 - Sở hữu Mosquitto/FastAPI/PostgreSQL, telemetry, command/ACK/state, REST/WebSocket, backend security nếu có, Docker/deployment, API contract, Capacitor/Android toolchain, sync/build và APK.
-- Ưu tiên tiếp theo: triển khai M1.5 — cài Capacitor + Android platform → verify Android Studio/SDK/adb/JDK/Gradle → cài trên điện thoại thật và kiểm tra LAN/REST/control/ACK-state → tạo APK.
+- Ưu tiên tiếp theo: kết nối điện thoại thật → cài debug APK → launch → cấu hình LAN API/CORS tối thiểu → kiểm tra telemetry → control/ACK-state.
 - B không mặc định sở hữu toàn bộ UI design; dùng ReactJS do C phát triển.
 
 ### C — Toản — Frontend + Camera/AI
@@ -263,7 +272,7 @@ G02/backend contract ổn định
 - G02 đã AGREED và M1 Web/LAN đã DONE theo xác nhận chính thức của nhóm; hai mục này không còn là blocker.
 - `firmware/` và `ai/` chưa có implementation.
 - Auth và WebSocket chưa tồn tại; frontend hiện polling REST.
-- Capacitor/Android chưa được cài/config; không có `android/`, Capacitor config, Gradle wrapper hoặc APK.
-- Audit môi trường chưa tìm thấy Android Studio, Android SDK hoặc `adb`; JDK 21 có nhưng compatibility chưa verify.
-- `npm ci` báo 3 dependency vulnerabilities (1 moderate, 1 high, 1 critical); cần `npm audit`/triage có kiểm soát, không tự dùng `--force` làm thay đổi dependency ngoài task tài liệu.
+- Capacitor/Android project và debug APK đã có; physical-device install/launch/API/control chưa có bằng chứng vì không có thiết bị `adb`.
+- Command-line SDK đã persistent tại `%LOCALAPPDATA%\Android\Sdk`; Android Studio chưa cài nhưng không chặn Gradle Wrapper build. PATH/JAVA_HOME toàn hệ thống không bị thay đổi.
+- Sau khi thêm Capacitor, npm báo 6 dependency vulnerabilities (4 moderate, 1 high, 1 critical); cần `npm audit`/triage có kiểm soát, không tự dùng `--force` làm thay đổi dependency ngoài task.
 - Broker anonymous chỉ phù hợp development/LAN tin cậy; production/public deployment chưa được harden.

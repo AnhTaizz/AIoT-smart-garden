@@ -6,7 +6,7 @@ Trạng thái: **AGREED — Thành (A), Tài (B), Toản (C) xác nhận ngày 2
 
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
 
-Frontend hiện hành là một codebase ReactJS cho web và, sau khi workstream Android được triển khai, cùng production build được đóng gói bằng Capacitor. Browser/Android đều đi qua REST/WebSocket của FastAPI; frontend không publish/subscribe MQTT trực tiếp. WebSocket chưa implement, nên behavior hiện tại là REST polling.
+Frontend hiện hành là một codebase ReactJS cho Web + Capacitor Android/iOS. Quyết định 2026-10-06: Web dùng HTTPS frontend tunnel và `/api`; Capacitor dùng HTTPS backend tunnel trực tiếp qua env. User không còn phụ thuộc LAN; ESP32 -> Mosquitto vẫn có thể dùng LAN. Frontend không publish/subscribe MQTT trực tiếp. WebSocket chưa implement, behavior hiện tại là REST polling. MQTT/API contract dưới đây không đổi; phone/iOS runtime chỉ được coi verified khi có bằng chứng riêng.
 
 ## Luồng bắt buộc của M1
 

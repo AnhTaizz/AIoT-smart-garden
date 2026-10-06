@@ -1,8 +1,17 @@
 # AIoT Smart Garden
 
-Bộ tài liệu và source cho dự án nhóm 3 người. Audit ngày 2026-09-29 xác nhận PR #2 (backend/simulator) và PR #3 (React telemetry/control) đã merge vào `main`. G02 đã **AGREED** và M1 Web/LAN đã được nhóm nghiệm thu end-to-end trên browser điện thoại; firmware ESP32 thật, M1.5 Capacitor/Android, camera và AI vẫn chưa hoàn thành. Xem trạng thái có bằng chứng trong [PROJECT_STATE](docs/PROJECT_STATE.md) và kế hoạch sống trong [ROADMAP](docs/ROADMAP.md).
+Bộ tài liệu và source cho dự án nhóm 3 người. G02 đã **AGREED**, M1 Web/LAN đã được nhóm nghiệm thu và M1.5A đã build được Android debug APK ngày 2026-09-30. Ngày 2026-10-06, người dùng xác nhận Mobile App Android thật qua 4G/5G PASS: telemetry/state, pump ON/OFF và Web/App đồng bộ ACK + state. iOS architecture/config READY, build/runtime NOT TESTED; firmware ESP32, camera và AI còn mở. Xem trạng thái có bằng chứng trong [PROJECT_STATE](docs/PROJECT_STATE.md) và kế hoạch sống trong [ROADMAP](docs/ROADMAP.md).
 
-Demo chính là **LOCAL MOBILE DEMO**: laptop chạy FastAPI, Mosquitto và PostgreSQL; ReactJS chạy trên browser hoặc cùng production build được đóng gói bằng Capacitor thành Android APK. Điện thoại và ESP32 kết nối cùng Wi-Fi/hotspot với laptop. Public Internet deployment không bắt buộc.
+Demo chính là **REMOTE WEB + CAPACITOR qua Cloudflare Quick Tunnel**: Web/mobile browser dùng HTTPS frontend; app Android/iOS đóng gói React bằng Capacitor và gọi trực tiếp HTTPS backend. User có thể dùng 4G/5G, không cần cùng Wi-Fi với laptop. Laptop vẫn chạy FastAPI, Mosquitto và PostgreSQL; ESP32 -> Mosquitto vẫn dùng LAN thiết bị. Không public broker hoặc database; không deploy production cloud.
+
+```text
+Browser --HTTPS--> Cloudflare frontend -> React/Nginx -> /api -> FastAPI
+React + Capacitor (Android/iOS) --HTTPS--> Cloudflare backend -> FastAPI
+FastAPI <-> Mosquitto <-> ESP32/simulator (telemetry/control/ACK/state)
+FastAPI -> PostgreSQL
+```
+
+**Mobile App** là ứng dụng Capacitor Android/iOS; **Mobile Browser** là truy cập bằng browser/PWA (repo chưa implement PWA). Hướng dẫn chạy mới, cấu hình mobile và test 4G/5G: [REMOTE_DEMO](docs/REMOTE_DEMO.md). Báo cáo nghiệm thu ở [REMOTE_MOBILE_REPORT](docs/REMOTE_MOBILE_REPORT_2026-10-06.md); không coi build PASS là phone runtime PASS.
 
 ## Bắt đầu từ đâu?
 
@@ -31,7 +40,7 @@ ESP32 / ESP32-CAM ──MQTT──> Mosquitto ──> FastAPI ──> PostgreSQL
                                                               + Android APK
 ```
 
-Chỉ có **một frontend ReactJS**, thiết kế responsive/mobile-first. Browser dùng React/Nginx; Android dùng chính production build đó trong native container/WebView của Capacitor. Không dùng React Native, Flutter hoặc một native UI riêng. Frontend không giao tiếp MQTT trực tiếp và không sở hữu logic safety; mọi intent điều khiển đi qua FastAPI rồi MQTT tới ESP32.
+Chỉ có **một frontend ReactJS**, thiết kế responsive/mobile-first. Browser dùng React/Nginx; Android/iOS dùng cùng React trong native container/WebView của Capacitor, với bundle mobile/API config riêng. Web build ở `dist/`, native build ở `dist-mobile/` để tránh sync nhầm `/api` của Web. Không dùng React Native, Flutter hoặc một native UI riêng. Frontend không giao tiếp MQTT trực tiếp và không sở hữu logic safety; mọi intent điều khiển đi qua FastAPI rồi MQTT tới ESP32.
 
 WebSocket nằm trong kiến trúc mục tiêu nhưng chưa được implement; frontend hiện dùng REST polling. ESP32 vẫn là nơi sở hữu Manual/Auto, relay, pump safety, local timeout và fail-safe.
 
@@ -60,7 +69,7 @@ Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_re
 - Các cổng mặc định `1883`, `5432`, `8000`, `5173` chưa bị ứng dụng khác sử dụng; có thể đổi trong `.env`.
 - Python 3.10 trở lên và pip nếu chạy simulator trực tiếp trên host.
 - Node.js 22 và npm chỉ khi phát triển frontend ngoài Docker; build Compose đã chứa Node trong image.
-- Wi-Fi hoặc hotspot cho phép laptop, điện thoại và ESP32 nhìn thấy nhau; firewall của laptop cho phép inbound TCP `5173` và `1883` trên mạng riêng khi demo.
+- ESP32 và laptop cần mạng thiết bị cho MQTT LAN; user/điện thoại truy cập HTTPS Cloudflare từ Internet. Firewall chỉ cần inbound MQTT `1883` trên mạng thiết bị tin cậy. Hướng LAN frontend bên dưới là legacy.
 
 Trên Windows dùng Docker Desktop với WSL2 integration nếu chạy lệnh từ WSL. Tất cả cấu hình hiện tại chỉ dành cho development local, không dùng làm cấu hình production.
 
@@ -90,7 +99,7 @@ Lệnh Compose mặc định ở trên là **development mode**: cả bốn cổ
 
 ## Địa chỉ truy cập
 
-| Thành phần | Development mode | LAN demo mode |
+| Thành phần | Development mode | LAN legacy (deprecated for user access) |
 | --- | --- | --- |
 | Dashboard | <http://127.0.0.1:5173> | `http://<IP_LAN_LAPTOP>:5173` |
 | Backend health/readiness | `http://127.0.0.1:8000/health`, `/ready` | Không expose trực tiếp; điện thoại dùng `/api/health`, `/api/ready` qua dashboard |
@@ -99,7 +108,7 @@ Lệnh Compose mặc định ở trên là **development mode**: cả bốn cổ
 
 Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong container frontend mới dùng hostname Docker `backend:8000`. Hostname `backend` chỉ phân giải trong mạng Compose, không phải địa chỉ nhập vào trình duyệt.
 
-## Chạy demo trên điện thoại
+## LAN legacy — DEPRECATED FOR USER ACCESS
 
 1. Cho laptop, điện thoại và ESP32 vào cùng một Wi-Fi/hotspot. Nên dùng hotspot riêng của nhóm thay vì mạng công cộng có client isolation.
 2. Tìm IP LAN của laptop:
@@ -121,13 +130,13 @@ Trình duyệt gọi API qua đường dẫn tương đối `/api`; Nginx trong 
 
 `compose.lan.yaml` chỉ thay port publishing của frontend và Mosquitto; frontend vẫn proxy `/api` tới FastAPI qua mạng Docker. File không chứa IP laptop, vì IP có thể đổi theo Wi-Fi/hotspot. Mosquitto hiện cho phép anonymous cho development/local demo tin cậy; tuyệt đối không dùng cấu hình này trên Wi-Fi công cộng hoặc public Internet. Nếu điện thoại không mở được dashboard, kiểm tra hai thiết bị có cùng subnet, client isolation và firewall trước khi sửa code.
 
-### M1.5 — Android app bằng Capacitor
+### M1.5 — Android/iOS app bằng Capacitor
 
-Capacitor/Android hiện là **TODO/NEXT** và tách thành milestone M1.5; M1 Web/LAN đã DONE, không phụ thuộc Android packaging. Khi thêm Android platform, B dùng production build của cùng frontend ReactJS do C phát triển; không tạo codebase mobile thứ hai.
+Capacitor/Android đã được người dùng nghiệm thu trên điện thoại thật qua 4G/5G ngày 2026-10-06 (**MANUAL DEVICE TEST**, không phải automated test): APK cài/chạy, gọi backend Cloudflare, telemetry/state, pump ON/OFF và ACK + state PASS. iOS architecture/config READY; build/runtime NOT TESTED. M1 Web/LAN đã DONE, không phụ thuộc Android packaging. B dùng production build của cùng frontend ReactJS do C phát triển; không tạo codebase mobile thứ hai.
 
-Trong app Android, `http://localhost:8000` là chính điện thoại và không thể trỏ tới backend trên laptop. Bản DEV trên LAN phải nhận API base URL qua cấu hình build, ví dụ `VITE_API_BASE_URL=http://<LAPTOP_LAN_IP>:<BACKEND_PORT>`. Khi có WebSocket, dùng cấu hình riêng tương đương như `VITE_WS_BASE_URL`; không hard-code IP cụ thể vào source hoặc coi một IP là cố định.
+App Capacitor dùng API HTTPS trực tiếp của **backend tunnel**, cấu hình bằng `VITE_API_URL` trong `frontend/.env.mobile.local`; không dùng frontend tunnel hoặc IP LAN. `localhost` trên phone là chính phone. Web vẫn mặc định `/api` qua frontend tunnel. WebSocket chưa implement; cả hai dùng REST polling và giữ ACK + state semantics.
 
-Nếu Android chặn cleartext HTTP, chỉ cấu hình ngoại lệ cho DEV/local LAN với phạm vi cần thiết. Production phải hướng tới HTTPS/WSS. Ưu tiên cài và test trên điện thoại Android thật qua USB debugging/`adb`; emulator là optional.
+Debug Android manifest hiện cho phép cleartext HTTP chỉ trong build type `debug` để test DEV/local LAN. Release không bật ngoại lệ này; production phải hướng tới HTTPS/WSS. Ưu tiên cài và test trên điện thoại Android thật qua USB debugging/`adb`; emulator là optional.
 
 Kiểm tra backend trên Linux/macOS/WSL:
 

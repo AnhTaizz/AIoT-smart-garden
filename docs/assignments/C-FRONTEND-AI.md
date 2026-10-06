@@ -1,5 +1,8 @@
 # Toản — Frontend và AI (Frontend-AI)
 
+> Hướng hiện hành 2026-10-06: Cloudflare Internet user access + React/Capacitor Android/iOS; MQTT LAN riêng cho thiết bị. Các tiêu chí phone LAN cũ dưới đây là legacy/deprecated for user access. Công việc mới và test 4G/5G theo [REMOTE_DEMO](../REMOTE_DEMO.md); giữ nguyên lịch sử nghiệm thu M1.
+
+
 Phụ trách: **Toản** (C). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Tài** (B); phối hợp **Thành** (A) cho dữ liệu camera. C sở hữu một frontend ReactJS responsive/mobile-first dùng chung cho web và Android; B đóng gói cùng codebase bằng Capacitor. Không tạo React Native/Flutter/native UI riêng. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
 Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
@@ -35,7 +38,7 @@ Mục tiêu chung: React hiển thị telemetry thật, gửi/theo dõi command 
 - **Tiêu chí nghiệm thu:** Điện thoại thật cùng LAN mở được dashboard bằng IP laptop, xem telemetry đã lưu và theo dõi command tới kết quả ACK/state; layout và thao tác không yêu cầu desktop.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
 - **Trạng thái:** `[x] DONE` cho M1 Web/LAN — responsive CSS/mobile breakpoint đã có và browser điện thoại thật đã được kiểm tra qua LAN.
-- **Issue / PR / bằng chứng:** `frontend/src/styles.css`; production build PASS; nhóm nghiệm thu M1 Web/LAN ngày 2026-09-29. Android app/Capacitor thuộc M1.5 và chưa làm.
+- **Issue / PR / bằng chứng:** `frontend/src/styles.css`; production build PASS; nhóm nghiệm thu M1 Web/LAN ngày 2026-09-29. M1.5A đã build debug APK; physical-phone UX/API vẫn chưa kiểm tra.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 

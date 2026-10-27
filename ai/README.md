@@ -1,6 +1,10 @@
 # AI và xử lý ảnh
 
-Trạng thái: chưa triển khai; camera/AI là phần bổ sung sau IoT cốt lõi.
+Nhánh `finetuneAI` đã bổ sung chatbot tư vấn nông nghiệp qua API model **ToanPhamAIEngi/Qwen3-8B-Vietnam-MultiDomainEdu** trên Kaggle. Xem [hướng dẫn chatbot](../docs/CHATBOT.md) để cấu hình endpoint, system prompt và đánh giá cho paper. Chatbot chỉ tư vấn, đọc dữ liệu vườn khi được chọn; không điều khiển bơm.
+
+Đã chuẩn bị [notebook server Kaggle](Smart_Garden_Kaggle_Server.ipynb) dùng đầy đủ chat template và chỉ decode token mới sinh. Xem [cách áp dụng vào Kaggle](../docs/KAGGLE_SERVER.md); notebook chưa được triển khai vào tài khoản Kaggle của chủ dự án. Kiểm thử adapter bằng `python -m pytest -q ai/tests/test_kaggle_server.py` từ root.
+
+Camera và xử lý ảnh vẫn chưa triển khai; đây là phần bổ sung sau IoT cốt lõi.
 
 Thư mục này sẽ chứa tài liệu dữ liệu, mã huấn luyện/đánh giá, inference mẫu và baseline xử lý ảnh. Trách nhiệm dự kiến:
 

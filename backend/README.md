@@ -1,5 +1,7 @@
 # Backend
 
+Chatbot trên nhánh `finetuneAI`: `POST /chat` kết nối API Kaggle tùy chỉnh, trả `reply/context/prompt_version`. Cấu hình `CHAT_*` chỉ ở backend; xem [hướng dẫn chatbot](../docs/CHATBOT.md). Kiểm thử cô lập bằng `python -m pytest -q tests/test_chat.py tests/test_validation.py`.
+
 Trạng thái: B-W1-01 và B-W1-02 đã triển khai theo bản đề xuất v1 cho G02, chờ Toản (C) review và chờ nhóm chốt contract. Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
 
 FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
@@ -103,6 +105,15 @@ curl http://127.0.0.1:5173/api/commands/<command_id>
 ```
 
 ### Test tự động
+
+Chạy E2E từ máy host khi Compose đang hoạt động (runner đọc `.env` và cấu hình event loop tương thích Psycopg trên Windows):
+
+```powershell
+.\.venv\Scripts\python.exe backend/tests/run_e2e.py
+.\.venv\Scripts\python.exe backend/tests/run_e2e.py --live-chat
+```
+
+Chạy từ root repo. Lệnh đầu kiểm tra IoT; lệnh thứ hai gọi Kaggle thật qua Nginx, dùng device ID ngẫu nhiên và telemetry mô phỏng. Các test chat xác nhận dữ liệu từ MQTT/DB đi vào context, tắt context đúng và không publish command; không chấm chất lượng nông học.
 
 Backend cần Python ≥ 3.11 nên chạy test trong container. Unit test không cần DB:
 

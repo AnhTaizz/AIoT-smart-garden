@@ -4,6 +4,10 @@ Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. P
 
 Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
 
+## Chatbot tư vấn nông nghiệp
+
+Nhánh `finetuneAI` tích hợp trợ lý nông nghiệp Qwen3-8B qua API Kaggle/ngrok. Mở **Trợ lý nông nghiệp** ở góc phải dashboard để hỏi về cây trồng hoặc giải thích dữ liệu vườn. Xem [cấu hình, system prompt và kiểm thử chatbot](docs/CHATBOT.md). Chatbot cung cấp tư vấn; điều khiển bơm tiếp tục qua bảng điều khiển hiện có.
+
 ## Bắt đầu từ đâu?
 
 1. Đọc [phân công nhóm](docs/TEAM.md), cập nhật GitHub username cho Thành (Embedded), Tài (Backend), Toản (Frontend-AI) và thống nhất người điều phối.

@@ -7,11 +7,13 @@ from typing import Annotated, Any, AsyncIterator, Literal
 from uuid import UUID, uuid4
 
 import psycopg
+import httpx
 from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from . import repository
+from .chat import CHAT_ERRORS, router as chat_router
 from .config import Settings
 from .db import apply_migrations, create_pool
 from .ingest import MessageHandler, consume
@@ -40,6 +42,7 @@ DevicePath = Annotated[str, Path(pattern=DEVICE_ID_PATTERN)]
 
 # One Vietnamese sentence per machine-readable code, for the dashboard.
 ERROR_MESSAGES = {
+    **CHAT_ERRORS,
     "no_telemetry": "Thiết bị chưa có telemetry nào được lưu.",
     "no_state": "Thiết bị chưa gửi trạng thái nào.",
     "command_not_found": "Không tìm thấy lệnh với command_id này.",
@@ -113,6 +116,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.queue = asyncio.Queue(maxsize=QUEUE_SIZE)
     app.state.bridge = MqttBridge(settings, asyncio.get_running_loop(), app.state.queue)
     background = asyncio.create_task(_run_background(app))
+    app.state.chat_client = httpx.AsyncClient(follow_redirects=False)
     try:
         yield
     finally:
@@ -120,10 +124,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         with suppress(asyncio.CancelledError):
             await background
         app.state.bridge.stop()
+        await app.state.chat_client.aclose()
         await app.state.pool.close()
 
 
 app = FastAPI(title="Smart Garden API", lifespan=lifespan)
+app.include_router(chat_router)
 
 
 @app.exception_handler(psycopg.Error)

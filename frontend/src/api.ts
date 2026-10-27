@@ -120,6 +120,90 @@ export class ApiError extends Error {
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "/api";
 const apiBaseUrl = configuredBaseUrl.replace(/\/$/, "");
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface GardenContext {
+  status: "included" | "disabled" | "unavailable";
+  device_id: string;
+  captured_at: string;
+  telemetry: {
+    received_at: string;
+    measured_at: string | null;
+    stale: boolean;
+    simulated: boolean;
+    clock_synced: boolean;
+    temperature_c: number | null;
+    air_humidity_pct: number | null;
+    soil_moisture_pct: number | null;
+    sensor_status: Record<string, string>;
+  } | null;
+  state: {
+    received_at: string;
+    stale: boolean;
+    mode: "MANUAL" | "AUTO";
+    relay_state: "on" | "off";
+  } | null;
+  warnings: string[];
+}
+
+export interface ChatReply {
+  reply: string;
+  context: GardenContext;
+  prompt_version: string;
+  reply_source: "model" | "garden_facts";
+}
+
+export async function sendChat(
+  message: string,
+  history: ChatTurn[],
+  deviceId: string,
+  includeGardenContext: boolean,
+  signal?: AbortSignal,
+): Promise<ChatReply> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let timedOut = false;
+  const timer = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 145000);
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) controller.abort();
+  try {
+    const response = await fetch(`${apiBaseUrl}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        message,
+        history,
+        device_id: deviceId,
+        include_garden_context: includeGardenContext,
+      }),
+      signal: controller.signal,
+    });
+    const result = await handleResponse<ChatReply>(response);
+    if (!isRecord(result) || typeof result.reply !== "string" || !result.reply.trim() || !isRecord(result.context)) {
+      throw new Error("Trợ lý chưa trả về câu trả lời hợp lệ. Bạn thử lại nhé.");
+    }
+    return result;
+  } catch (error) {
+    if (timedOut) throw new Error("Trợ lý phản hồi quá lâu. Bạn thử gửi lại nhé.");
+    if (error instanceof SyntaxError) {
+      throw new Error("Trợ lý chưa trả về câu trả lời hợp lệ. Bạn thử lại nhé.");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Không kết nối được backend. Bạn kiểm tra kết nối rồi thử lại nhé.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }

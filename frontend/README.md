@@ -1,5 +1,7 @@
 # Frontend
 
+Nhánh `finetuneAI` có nút nổi **Trợ lý nông nghiệp**, chat nhiều lượt, bật/tắt gửi dữ liệu vườn và xem bản chụp cảm biến dùng cho mỗi câu trả lời. Giao diện gọi `/api/chat` qua backend, render Markdown an toàn và lưu hội thoại trong bộ nhớ tab. Xem [hướng dẫn chatbot](../docs/CHATBOT.md).
+
 Trạng thái: dashboard cơ bản của TASK-000C; chưa có dữ liệu cảm biến hoặc điều khiển thiết bị.
 
 Frontend dùng React, TypeScript và Vite. Dashboard tiếng Việt hiện có:

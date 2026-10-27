@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import ChatAssistant from "./ChatAssistant";
 import {
   fetchCommand,
   fetchDeviceState,
@@ -800,6 +801,7 @@ export default function App() {
         <span>Smart Garden — AIoT Dashboard</span>
         <span>Milestone M1 · Giám sát & Điều khiển an toàn</span>
       </footer>
+      <ChatAssistant deviceId={deviceId} />
     </div>
   );
 }

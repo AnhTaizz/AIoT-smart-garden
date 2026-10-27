@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "react-markdown": "10.1.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.6.4",

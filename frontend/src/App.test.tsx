@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import App from "./App";
+import App, { mergeCommands } from "./App";
+import type { CommandOut } from "./api";
 
 const mockTelemetry = {
   id: 1,
@@ -242,6 +243,7 @@ describe("Dashboard", () => {
       const urlStr = String(url);
       if (urlStr.endsWith("/health")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "ok" }) });
       if (urlStr.endsWith("/ready")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "ready", checks: { postgres: "up" } }) });
+      if (urlStr.endsWith("/control-access")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ commands_allowed: true, reason: null }) });
       if (urlStr.includes("/devices/node_01/latest")) return Promise.resolve({ ok: true, status: 200, json: async () => mockTelemetry });
       if (urlStr.includes("/devices/node_01/state")) return Promise.resolve({ ok: true, status: 200, json: async () => mockDeviceState });
       if (urlStr.includes("/devices/node_01/telemetry")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ device_id: "node_01", count: 0, items: [] }) });
@@ -329,6 +331,7 @@ describe("Dashboard", () => {
       const urlStr = String(url);
       if (urlStr.endsWith("/health")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "ok" }) });
       if (urlStr.endsWith("/ready")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ status: "ready", checks: { postgres: "up" } }) });
+      if (urlStr.endsWith("/control-access")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ commands_allowed: true, reason: null }) });
       if (urlStr.includes("/devices/node_01/latest")) return Promise.resolve({ ok: true, status: 200, json: async () => mockTelemetry });
       if (urlStr.includes("/devices/node_01/state")) return Promise.resolve({ ok: true, status: 200, json: async () => mockDeviceState });
       if (urlStr.includes("/devices/node_01/telemetry")) return Promise.resolve({ ok: true, status: 200, json: async () => ({ device_id: "node_01", count: 0, items: [] }) });
@@ -392,6 +395,10 @@ describe("Remote command lifecycle", () => {
     fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
     await waitFor(() => expect(screen.getByText(message as RegExp)).toBeInTheDocument(), {timeout: 3000});
     expect(screen.queryByText(/Thiết bị đã bật bơm thành công/)).not.toBeInTheDocument();
+    // Nothing re-sends pump_on after a final timeout/rejection.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const mock = vi.mocked(fetch);
+    expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
 
   it("recovers command status after network loss without sending ON twice", async () => {
@@ -492,5 +499,211 @@ describe("B/C state distinctions", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByText(/Hết thời gian chờ · ACK đến trễ/)).toBeInTheDocument());
     expect(screen.queryByText("Thành công")).not.toBeInTheDocument();
+  });
+});
+
+
+type MockResponse = { ok: boolean; status: number; json: () => Promise<unknown> };
+
+function deferred() {
+  let resolve!: (value: MockResponse) => void;
+  const promise = new Promise<MockResponse>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+const okJson = (body: unknown): MockResponse => ({ ok: true, status: 200, json: async () => body });
+
+function postCalls(mock: ReturnType<typeof vi.fn>) {
+  return mock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+}
+
+/** Capture the 5 s dashboard poll so tests trigger ticks deterministically. */
+function capturePollTicks() {
+  const ticks: Array<() => void> = [];
+  const realSetInterval = window.setInterval.bind(window);
+  vi.spyOn(window, "setInterval").mockImplementation(((handler: TimerHandler, ms?: number) => {
+    if (ms === 5000 && typeof handler === "function") {
+      ticks.push(handler as () => void);
+      return 0;
+    }
+    return realSetInterval(handler, ms);
+  }) as typeof window.setInterval);
+  return ticks;
+}
+
+describe("Control access fails closed", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  const withAccess = (respond: () => Promise<MockResponse>) => {
+    const base = setupMockFetch();
+    const mock = vi.fn((url: string, init?: RequestInit) =>
+      String(url).endsWith("/control-access") ? respond() : base(url, init));
+    vi.stubGlobal("fetch", mock);
+    return mock;
+  };
+
+  it.each([
+    ["HTTP 500", () => Promise.resolve({ok: false, status: 500, json: async () => ({detail: {code: "http_500"}})})],
+    ["network error", () => Promise.reject(new TypeError("Failed to fetch"))],
+    ["empty object", () => Promise.resolve(okJson({}))],
+    ["string boolean", () => Promise.resolve(okJson({commands_allowed: "true", reason: null}))],
+    ["allowed with a reason", () => Promise.resolve(okJson({commands_allowed: true, reason: "x"}))],
+    ["null body", () => Promise.resolve(okJson(null))],
+    ["non-JSON body", () => Promise.resolve({ok: true, status: 200, json: async () => { throw new SyntaxError("bad"); }})],
+  ])("locks the pump on %s without marking the backend offline", async (_name, respond) => {
+    const mock = withAccess(respond as () => Promise<MockResponse>);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Không xác minh được quyền điều khiển/)).toBeInTheDocument());
+    expect(screen.getByTestId("backend-status")).toHaveTextContent("Đang hoạt động");
+    expect(screen.getByText("28.4")).toBeInTheDocument();
+    const on = screen.getByRole("button", {name: "Bật bơm"});
+    expect(on).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Tắt bơm"})).toBeDisabled();
+    fireEvent.click(on);
+    expect(postCalls(mock)).toHaveLength(0);
+  });
+
+  it("stays locked while the check hangs, then unlocks only on an explicit allow", async () => {
+    const pending = deferred();
+    const mock = withAccess(() => pending.promise);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Đang xác minh quyền điều khiển/)).toBeInTheDocument());
+    expect(screen.getByRole("button", {name: "Bật bơm"})).toBeDisabled();
+    expect(postCalls(mock)).toHaveLength(0);
+    pending.resolve(okJson({commands_allowed: true, reason: null}));
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    expect(screen.queryByTestId("control-notice")).not.toBeInTheDocument();
+  });
+
+  it("treats a refusal with an unknown reason as denied", async () => {
+    withAccess(() => Promise.resolve(okJson({commands_allowed: false, reason: "auth_required"})));
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Điều khiển bơm từ xa đang tắt/)).toBeInTheDocument());
+    expect(screen.getByRole("button", {name: "Bật bơm"})).toBeDisabled();
+  });
+
+  it("re-locks when a later access check fails", async () => {
+    const ticks = capturePollTicks();
+    let fail = false;
+    withAccess(() => fail
+      ? Promise.reject(new TypeError("offline"))
+      : Promise.resolve(okJson({commands_allowed: true, reason: null})));
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    fail = true;
+    act(() => ticks[ticks.length - 1]());
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).toBeDisabled());
+    expect(screen.getByText(/Không xác minh được quyền điều khiển/)).toBeInTheDocument();
+  });
+});
+
+describe("Polling order and outdated data", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("drops a slow response from before a manual refresh", async () => {
+    const slow = deferred();
+    let latestCalls = 0;
+    const base = setupMockFetch();
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/devices/node_01/latest")) {
+        latestCalls += 1;
+        if (latestCalls === 1) return slow.promise;
+        return Promise.resolve(okJson({...mockTelemetry, sequence: 50, temperature_c: 31.5}));
+      }
+      return base(url, init);
+    }));
+    render(<App />);
+    await waitFor(() => expect(latestCalls).toBe(1));
+    fireEvent.click(screen.getByRole("button", {name: "Kiểm tra và làm mới dữ liệu"}));
+    await waitFor(() => expect(screen.getByText("31.5")).toBeInTheDocument());
+    // The old request finishes last with older data; it must not win.
+    await act(async () => { slow.resolve(okJson({...mockTelemetry, sequence: 49, temperature_c: 20.1})); });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.getByText("31.5")).toBeInTheDocument();
+    expect(screen.queryByText("20.1")).not.toBeInTheDocument();
+  });
+
+  it("never runs two polls at once; a tick during a slow poll is queued once", async () => {
+    const ticks = capturePollTicks();
+    const slow = deferred();
+    let latestCalls = 0;
+    const base = setupMockFetch();
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/devices/node_01/latest")) {
+        latestCalls += 1;
+        if (latestCalls === 1) return slow.promise;
+        return Promise.resolve(okJson({...mockTelemetry, sequence: 61, temperature_c: 33.3}));
+      }
+      return base(url, init);
+    }));
+    render(<App />);
+    await waitFor(() => expect(latestCalls).toBe(1));
+    act(() => { ticks[0](); ticks[0](); ticks[0](); });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(latestCalls).toBe(1);
+    await act(async () => { slow.resolve(okJson({...mockTelemetry, sequence: 60, temperature_c: 22.2})); });
+    // Exactly one queued follow-up runs after the slow poll, and its newer value stays.
+    await waitFor(() => expect(screen.getByText("33.3")).toBeInTheDocument());
+    expect(latestCalls).toBe(2);
+    expect(screen.queryByText("22.2")).not.toBeInTheDocument();
+  });
+
+  it("keeps the last good reading after an API error but marks it as not live", async () => {
+    const ticks = capturePollTicks();
+    let broken = false;
+    const base = setupMockFetch();
+    const error = () => Promise.resolve({ok: false, status: 503, json: async () => ({detail: {code: "database_unavailable"}})});
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const path = String(url);
+      if (broken && (path.includes("/latest") || path.includes("/state"))) return error();
+      return base(url, init);
+    }));
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Trực tuyến")).toBeInTheDocument());
+    expect(screen.getByText("ĐANG TẮT")).toBeInTheDocument();
+    broken = true;
+    act(() => ticks[0]());
+    await waitFor(() => expect(screen.getByText("Chưa cập nhật (lỗi API)")).toBeInTheDocument());
+    expect(screen.getByText("28.4")).toBeInTheDocument();
+    expect(screen.queryByText("Trực tuyến")).not.toBeInTheDocument();
+    expect(screen.getByText("Chưa cập nhật: tắt")).toBeInTheDocument();
+    expect(screen.queryByText("ĐANG TẮT")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/không phải số đo realtime/);
+    expect(screen.getByText(/Số đo cuối cùng lúc/)).toBeInTheDocument();
+  });
+
+  it("stops writing after unmount", async () => {
+    const ticks = capturePollTicks();
+    const slow = deferred();
+    let latestCalls = 0;
+    const base = setupMockFetch();
+    const mock = vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/devices/node_01/latest")) {
+        latestCalls += 1;
+        return slow.promise;
+      }
+      return base(url, init);
+    });
+    vi.stubGlobal("fetch", mock);
+    const errors = vi.spyOn(console, "error");
+    const { unmount } = render(<App />);
+    await waitFor(() => expect(latestCalls).toBe(1));
+    unmount();
+    const callsAtUnmount = mock.mock.calls.length;
+    await act(async () => { slow.resolve(okJson(mockTelemetry)); });
+    act(() => ticks[0]());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mock.mock.calls.length).toBe(callsAtUnmount);
+    expect(errors).not.toHaveBeenCalled();
+  });
+});
+
+describe("mergeCommands", () => {
+  const command = (status: CommandOut["status"]) => ({command_id: "c1", status}) as CommandOut;
+
+  it("does not let an older list move a final command back to pending", () => {
+    expect(mergeCommands([command("pending")], [command("applied")])[0].status).toBe("applied");
+    expect(mergeCommands([command("timeout")], [command("pending")])[0].status).toBe("timeout");
+    expect(mergeCommands([command("pending")], [])[0].status).toBe("pending");
   });
 });

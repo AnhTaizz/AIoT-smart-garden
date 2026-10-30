@@ -453,27 +453,29 @@ export async function fetchRecentCommands(
   }
 }
 
-/** Whether this client may send pump commands; null when it cannot be read. */
-export async function fetchControlAccess(
-  signal?: AbortSignal,
-): Promise<ControlAccess | null> {
-  try {
-    const response = await apiFetch(`${apiBaseUrl}/control-access`, {
-      signal,
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-    if (!response.ok) return null;
-    const body: unknown = await response.json();
-    if (isRecord(body) && typeof body.commands_allowed === "boolean") {
-      return {
-        commands_allowed: body.commands_allowed,
-        reason: body.reason === "remote_control_disabled" ? body.reason : null,
-      };
-    }
-    return null;
-  } catch {
-    // Unknown is not "allowed": the backend still enforces the rule on POST.
-    return null;
+/** Parse /control-access strictly; anything unexpected is "not verified". */
+export function parseControlAccess(body: unknown): ControlAccess {
+  if (isRecord(body) && body.commands_allowed === true && body.reason === null) {
+    return { commands_allowed: true, reason: null };
   }
+  // Denial is the safe direction, so a refusal with a newer reason still locks.
+  if (isRecord(body) && body.commands_allowed === false) {
+    return { commands_allowed: false, reason: "remote_control_disabled" };
+  }
+  throw new Error("Phản hồi quyền điều khiển không hợp lệ.");
+}
+
+/**
+ * Ask the backend whether this client may send pump commands.
+ *
+ * Throws on network errors, timeouts, non-2xx and invalid payloads so the UI
+ * keeps control locked. This is only UX: the backend enforces access itself.
+ */
+export async function fetchControlAccess(signal?: AbortSignal): Promise<ControlAccess> {
+  const response = await apiFetch(`${apiBaseUrl}/control-access`, {
+    signal,
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  return parseControlAccess(await handleResponse<unknown>(response));
 }

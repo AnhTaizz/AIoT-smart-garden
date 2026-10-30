@@ -408,6 +408,20 @@ describe("Remote command lifecycle", () => {
     expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
 
+  it("never re-sends pump_on when the POST itself fails on the network", async () => {
+    const base = setupMockFetch();
+    const mock = vi.fn((url: string, init?: RequestInit) =>
+      init?.method === "POST" ? Promise.reject(new TypeError("Failed to fetch")) : base(url, init));
+    vi.stubGlobal("fetch", mock);
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Failed to fetch/));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(screen.queryByText(/Đang đợi ACK/)).not.toBeInTheDocument();
+  });
+
   it("recovers command status after network loss without sending ON twice", async () => {
     let reads = 0;
     const base = setupMockFetch();

@@ -1,12 +1,29 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { ApiError, login } from "./api";
-import { setSession, type EndReason } from "./auth";
+import { setSession, type SessionEnd } from "./auth";
 
-const endNotices: Record<EndReason, string> = {
-  logout: "Bạn đã đăng xuất.",
-  expired: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
-  unauthorized: "Phiên đăng nhập không còn hợp lệ (hết hạn hoặc đã bị thu hồi). Vui lòng đăng nhập lại.",
-};
+function formatClock(epochMs: number): string {
+  return new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit" }).format(epochMs);
+}
+
+function endNotice(end: SessionEnd): string {
+  switch (end.reason) {
+    case "logout":
+      return "Bạn đã đăng xuất. Máy chủ đã xác nhận phiên không còn hiệu lực.";
+    case "logout_unconfirmed":
+      // Never claim the server revoked a token when the request failed.
+      return (
+        "Đã thoát trên thiết bị này, nhưng CHƯA xác nhận được việc thu hồi phiên ở máy chủ"
+        + " (mất kết nối hoặc máy chủ lỗi). Phiên ở máy chủ có thể vẫn dùng được"
+        + (end.serverExpiresAt ? ` tới khi hết hạn lúc ${formatClock(end.serverExpiresAt)}` : " tới khi hết hạn")
+        + ". Nếu lo ngại token bị lộ, hãy đăng nhập lại rồi đăng xuất khi có mạng, hoặc đổi mật khẩu vận hành."
+      );
+    case "expired":
+      return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+    case "unauthorized":
+      return "Phiên đăng nhập không còn hợp lệ (hết hạn hoặc đã bị thu hồi). Vui lòng đăng nhập lại.";
+  }
+}
 
 function loginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -23,7 +40,7 @@ function loginErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Đăng nhập thất bại.";
 }
 
-export default function LoginScreen({ endReason }: { endReason: EndReason | null }) {
+export default function LoginScreen({ end }: { end: SessionEnd | null }) {
   const usernameId = useId();
   const passwordId = useId();
   const errorId = useId();
@@ -80,9 +97,13 @@ export default function LoginScreen({ endReason }: { endReason: EndReason | null
             Cần đăng nhập để xem dữ liệu vườn, dùng trợ lý và điều khiển bơm.
           </p>
 
-          {endReason && (
-            <p className="feedback-banner login-notice" role="status">
-              {endNotices[endReason]}
+          {end && (
+            <p
+              className={`feedback-banner ${end.reason === "logout_unconfirmed" ? "error-banner" : "login-notice"}`}
+              role="status"
+              data-testid="session-end-notice"
+            >
+              {endNotice(end)}
             </p>
           )}
 

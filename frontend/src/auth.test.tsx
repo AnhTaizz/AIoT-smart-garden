@@ -183,28 +183,121 @@ describe("Session end", () => {
     expect(screen.queryByRole("button", { name: "Bật bơm" })).not.toBeInTheDocument();
   });
 
-  it("logs out on the server and locally", async () => {
+  it("confirms a server-side logout only after the server answered", async () => {
     const { calls } = backend();
     render(<App />);
     await logIn();
     await waitFor(() => expect(screen.getByText("27.7")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
-    await waitFor(() => expect(screen.getByText("Bạn đã đăng xuất.")).toBeInTheDocument());
-    const logout = calls.find((c) => c.url.endsWith("/auth/logout"))!;
-    expect(logout.method).toBe("POST");
-    expect(logout.auth).toBe(`Bearer ${TOKEN}`);
+    await waitFor(() => expect(screen.getByTestId("session-end-notice")).toHaveTextContent(/Máy chủ đã xác nhận/));
+    const logout = calls.filter((c) => c.url.endsWith("/auth/logout"));
+    expect(logout).toHaveLength(1);
+    expect(logout[0].method).toBe("POST");
+    expect(logout[0].auth).toBe(`Bearer ${TOKEN}`);
     expect(getSession()).toBeNull();
   });
 
-  it("still ends the local session if the logout request fails", async () => {
-    backend();
+  it("treats a 401 from logout as already logged out on the server", async () => {
+    const base = backend();
     render(<App />);
     await logIn();
     await waitFor(() => expect(screen.getByText("27.7")).toBeInTheDocument());
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => String(url).endsWith("/auth/logout")
+      ? Promise.resolve(json(401, { detail: { code: "invalid_session" } }))
+      : base.mock(url, init)));
     fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
-    await waitFor(() => expect(screen.getByText("Bạn đã đăng xuất.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("session-end-notice")).toHaveTextContent(/Máy chủ đã xác nhận/));
+  });
+
+  it.each([
+    ["network error", () => Promise.reject(new TypeError("offline"))],
+    ["HTTP 500", () => Promise.resolve(json(500, { detail: { code: "database_unavailable", message: "DB lỗi" } }))],
+    ["timeout", () => Promise.reject(new DOMException("Aborted", "AbortError"))],
+  ])("on %s: leaves this device but does not claim the server revoked the token", async (_name, fail) => {
+    const base = backend();
+    render(<App />);
+    await logIn();
+    await waitFor(() => expect(screen.getByText("27.7")).toBeInTheDocument());
+    const logoutCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/auth/logout")) {
+        logoutCalls.push(String(url));
+        return (fail as () => Promise<Reply>)();
+      }
+      return base.mock(url, init);
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
+    const notice = await screen.findByTestId("session-end-notice");
+    expect(notice).toHaveTextContent(/Đã thoát trên thiết bị này/);
+    expect(notice).toHaveTextContent(/CHƯA xác nhận/);
+    expect(notice).toHaveTextContent(/hết hạn lúc \d{2}:\d{2}/);
+    expect(notice).not.toHaveTextContent(/Máy chủ đã xác nhận/);
     expect(getSession()).toBeNull();
+    // The revoke is tried once, never retried automatically.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(logoutCalls).toHaveLength(1);
+  });
+
+  it("locks pump controls immediately while the logout request is pending", async () => {
+    const base = backend({ commandStatus: 202 });
+    render(<App />);
+    await logIn();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Bật bơm" })).not.toBeDisabled());
+    let finish!: (reply: Reply) => void;
+    const mock = vi.fn((url: string, init?: RequestInit) => String(url).endsWith("/auth/logout")
+      ? new Promise<Reply>((resolve) => { finish = resolve; })
+      : base.mock(url, init));
+    vi.stubGlobal("fetch", mock);
+    fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
+    expect(screen.getByRole("button", { name: "Bật bơm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Tắt bơm" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Đang đăng xuất…" })).toBeDisabled();
+    expect(screen.getByText(/Đang đăng xuất; điều khiển bơm đã khóa/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bật bơm" }));
+    expect(mock.mock.calls.filter(([, init]) => init?.method === "POST" && !String(init?.body ?? "").includes("username"))
+      .filter(([url]) => String(url).includes("/commands"))).toHaveLength(0);
+    await act(async () => { finish(json(200, { status: "logged_out" })); });
+    await screen.findByTestId("session-end-notice");
+  });
+
+  it("a late 401 from the old session does not end a new login after an unconfirmed logout", async () => {
+    // The old session has a slow read in flight when the user logs out offline.
+    const base = backend();
+    render(<App />);
+    await logIn();
+    await waitFor(() => expect(screen.getByText("27.7")).toBeInTheDocument());
+    let releaseOld!: (reply: Reply) => void;
+    let offline = true;
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const path = String(url);
+      if (offline && path.endsWith("/auth/logout")) return Promise.reject(new TypeError("offline"));
+      if (offline && path.includes("/latest")) return new Promise<Reply>((resolve) => { releaseOld = resolve; });
+      return base.mock(url, init);
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Kiểm tra và làm mới dữ liệu" }));
+    await waitFor(() => expect(releaseOld).toBeDefined());
+    fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
+    await screen.findByText(/CHƯA xác nhận/);
+    offline = false;
+    const NEW = "second-session-token-0123456789abcdef";
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      if (String(url).endsWith("/auth/login")) {
+        return Promise.resolve(json(200, { access_token: NEW, token_type: "bearer",
+          expires_at: new Date(Date.now() + 3_600_000).toISOString(), user: { username: "operator", role: "operator" } }));
+      }
+      if (headers.Authorization === `Bearer ${NEW}`) {
+        return base.mock(url, { ...init, headers: { ...headers, Authorization: `Bearer ${TOKEN}` } });
+      }
+      return base.mock(url, init);
+    }));
+    await logIn();
+    await waitFor(() => expect(getSession()?.token).toBe(NEW));
+    // Now the old request finally fails with 401: it must not log the user out.
+    await act(async () => { releaseOld(json(401, { detail: { code: "invalid_session" } })); });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(getSession()?.token).toBe(NEW);
+    expect(screen.getByTestId("session-user")).toBeInTheDocument();
   });
 
   it("ignores a late 401 for an older token after a new login", async () => {

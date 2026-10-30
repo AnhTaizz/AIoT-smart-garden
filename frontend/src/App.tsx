@@ -6,7 +6,7 @@ import {
   getSession,
   subscribe,
   type AuthSession,
-  type EndReason,
+  type SessionEnd,
 } from "./auth";
 import {
   fetchCommand,
@@ -239,13 +239,13 @@ const roleLabels: Record<AuthSession["role"], string> = {
  */
 export default function App() {
   const [session, setCurrent] = useState<AuthSession | null>(getSession);
-  const [endReason, setEndReason] = useState<EndReason | null>(null);
+  const [sessionEnd, setSessionEnd] = useState<SessionEnd | null>(null);
 
   useEffect(() => {
     setCurrent(getSession());
-    const unsubscribe = subscribe((next, reason) => {
+    const unsubscribe = subscribe((next, end) => {
       setCurrent(next);
-      setEndReason(reason);
+      setSessionEnd(end);
     });
     return () => {
       unsubscribe();
@@ -267,7 +267,7 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [session]);
 
-  if (!session) return <LoginScreen endReason={endReason} />;
+  if (!session) return <LoginScreen end={sessionEnd} />;
   return <Dashboard key={session.token} session={session} />;
 }
 
@@ -290,6 +290,7 @@ function Dashboard({ session }: { session: AuthSession }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const commandPollRef = useRef<number | null>(null);
   // Lets the command poll ask for a fresh load through the single-flight loop.
@@ -479,16 +480,25 @@ function Dashboard({ session }: { session: AuthSession }) {
   }, [activeCommand, deviceId, refreshKey]);
 
   const isBackendOnline = status.backend === "online";
-  const canControl = isBackendOnline && controlAccess === "allowed";
+  const canControl = isBackendOnline && controlAccess === "allowed" && !loggingOut;
 
   const handleLogout = async () => {
+    if (loggingOut) return;
+    // Lock pump controls at once; nothing is sent while the revoke runs.
+    setLoggingOut(true);
+    const token = session.token;
+    let confirmed = false;
     try {
       await logout();
+      confirmed = true;
     } catch {
-      // The local session ends anyway; the server copy expires on its own.
-    } finally {
-      clearSession("logout");
+      // Not confirmed: the token may still be valid on the server until it
+      // expires. The device forgets it anyway and says so honestly.
     }
+    // A newer login (another tab of this app instance) must not be ended.
+    if (getSession()?.token !== token) return;
+    if (confirmed) clearSession("logout");
+    else clearSession("logout_unconfirmed", session.expiresAt);
   };
 
   // Handle send command
@@ -523,8 +533,9 @@ function Dashboard({ session }: { session: AuthSession }) {
   // Values kept from an earlier poll after an API error are not live.
   const telemetryOutdated = telemetry !== null && (telemetry.stale || telemetryError);
   const stateOutdated = deviceState !== null && (deviceState.stale || stateError);
-  const controlNotice =
-    !isBackendOnline
+  const controlNotice = loggingOut
+    ? "Đang đăng xuất; điều khiển bơm đã khóa."
+    : !isBackendOnline
       ? null
       : controlAccess === "denied"
         ? VIEWER_NOTICE
@@ -564,8 +575,14 @@ function Dashboard({ session }: { session: AuthSession }) {
           <span className="session-badge" data-testid="session-user">
             {session.username} · {roleLabels[session.role]}
           </span>
-          <button type="button" className="refresh-button logout-button" onClick={handleLogout}>
-            Đăng xuất
+          <button
+            type="button"
+            className="refresh-button logout-button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            aria-busy={loggingOut}
+          >
+            {loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
           </button>
         </div>
       </header>

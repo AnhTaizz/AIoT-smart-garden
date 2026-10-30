@@ -17,10 +17,21 @@ export interface AuthSession {
   expiresAt: number;
 }
 
-/** Why the session ended; shown on the login screen. */
-export type EndReason = "logout" | "expired" | "unauthorized";
+/**
+ * Why the session ended; shown on the login screen.
+ * - logout: the server confirmed the token is revoked (or already invalid).
+ * - logout_unconfirmed: removed on this device only; the revoke request
+ *   failed, so the token may still be valid on the server until it expires.
+ */
+export type EndReason = "logout" | "logout_unconfirmed" | "expired" | "unauthorized";
 
-type Listener = (session: AuthSession | null, reason: EndReason | null) => void;
+export interface SessionEnd {
+  reason: EndReason;
+  /** Server expiry of the ended token (epoch ms), for logout_unconfirmed. */
+  serverExpiresAt?: number;
+}
+
+type Listener = (session: AuthSession | null, end: SessionEnd | null) => void;
 
 let current: AuthSession | null = null;
 const listeners = new Set<Listener>();
@@ -34,10 +45,11 @@ export function setSession(session: AuthSession): void {
   listeners.forEach((listener) => listener(current, null));
 }
 
-export function clearSession(reason: EndReason): void {
+export function clearSession(reason: EndReason, serverExpiresAt?: number): void {
   if (current === null) return;
   current = null;
-  listeners.forEach((listener) => listener(null, reason));
+  const end: SessionEnd = { reason, serverExpiresAt };
+  listeners.forEach((listener) => listener(null, end));
 }
 
 export function subscribe(listener: Listener): () => void {

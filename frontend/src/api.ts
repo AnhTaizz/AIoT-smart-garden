@@ -144,7 +144,11 @@ function noteUnauthorized(response: Response, token: string | undefined): void {
   }
 }
 
-async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+async function apiFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  { handleUnauthorized = true }: { handleUnauthorized?: boolean } = {},
+): Promise<Response> {
   const token = getSession()?.token;
   const headers = { ...(init.headers as Record<string, string> | undefined), ...authHeader() };
   const controller = new AbortController();
@@ -156,7 +160,7 @@ async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promi
   try {
     // No automatic POST retry: an interrupted response may already have published ON.
     const response = await fetch(input, { ...init, headers, signal: controller.signal });
-    noteUnauthorized(response, token);
+    if (handleUnauthorized) noteUnauthorized(response, token);
     return response;
   } finally {
     window.clearTimeout(timeout);
@@ -523,11 +527,21 @@ export async function login(username: string, password: string): Promise<AuthSes
   return { token: body.access_token, username: user.username, role: role as Role, expiresAt };
 }
 
-/** Revoke the session on the server; callers clear the local session regardless. */
-export async function logout(): Promise<void> {
-  await apiFetch(`${apiBaseUrl}/auth/logout`, {
-    method: "POST",
-    cache: "no-store",
-    headers: { Accept: "application/json" },
-  });
+/**
+ * Ask the server to revoke the current token. Never retried.
+ *
+ * Resolves only when the server answered: 200 (revoked now) or 401 (the token
+ * was already invalid there). Throws on network errors, the 10 s timeout and
+ * other statuses, in which case revocation is NOT confirmed.
+ */
+export async function logout(): Promise<"revoked" | "already_invalid"> {
+  const response = await apiFetch(
+    `${apiBaseUrl}/auth/logout`,
+    { method: "POST", cache: "no-store", headers: { Accept: "application/json" } },
+    // The caller decides how the session ends; a 401 here is not "expired".
+    { handleUnauthorized: false },
+  );
+  if (response.status === 401) return "already_invalid";
+  await handleResponse<unknown>(response);
+  return "revoked";
 }

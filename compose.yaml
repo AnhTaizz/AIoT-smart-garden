@@ -62,6 +62,7 @@ services:
       CHAT_TEMPERATURE: ${CHAT_TEMPERATURE:-0.7}
       CHAT_MAX_TOKENS: ${CHAT_MAX_TOKENS:-1024}
       CHAT_TIMEOUT_SECONDS: ${CHAT_TIMEOUT_SECONDS:-120}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost}
     ports:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     depends_on:
@@ -87,6 +88,7 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_URL: ${VITE_API_URL:-}
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-5173}:80"
     depends_on:

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import ChatAssistant from "./ChatAssistant";
 import {
   fetchCommand,
+  fetchControlAccess,
   fetchDeviceState,
   fetchLatestTelemetry,
   fetchRecentCommands,
@@ -60,6 +61,40 @@ const rejectReasonsVi: Record<string, string> = {
 };
 
 const durationPresets = [5, 10, 30, 60];
+
+type DataSource = "latest" | "state" | "history" | "commands";
+
+const dataSourceLabels: Record<DataSource, string> = {
+  latest: "số đo mới nhất",
+  state: "trạng thái thiết bị",
+  history: "lịch sử telemetry",
+  commands: "lịch sử lệnh",
+};
+
+const commandStatusLabels: Record<CommandOut["status"], string> = {
+  applied: "Thành công",
+  pending: "Đang chờ",
+  rejected: "Từ chối",
+  timeout: "Hết thời gian chờ",
+};
+
+// "checking"/"unknown" keep the pump locked: control is allowed only after the
+// backend positively says so. The backend still enforces this on every POST.
+type ControlAccessState = "checking" | "allowed" | "denied" | "unknown";
+
+const CONTROL_UNKNOWN_NOTICE =
+  "Không xác minh được quyền điều khiển. Nút bơm tạm khóa; nhấn Làm mới để thử lại. Số đo và trạng thái vẫn hiển thị bình thường.";
+
+/** A command status only moves pending -> final, so never step back to pending. */
+export function mergeCommands(fetched: CommandOut[], current: CommandOut[]): CommandOut[] {
+  return fetched.map((command) => {
+    const local = current.find((item) => item.command_id === command.command_id);
+    return local && local.status !== "pending" && command.status === "pending" ? local : command;
+  });
+}
+
+const REMOTE_CONTROL_NOTICE =
+  "Điều khiển bơm từ xa đang tắt: API chưa có xác thực nên chỉ nhận lệnh từ laptop hoặc mạng LAN tin cậy. Bạn vẫn xem được số đo và trạng thái.";
 
 function StatusDot({ state }: { state: BackendStatus | DatabaseStatus }) {
   return <span aria-hidden="true" className={`status-dot status-${state}`} />;
@@ -191,6 +226,8 @@ export default function App() {
   const [history, setHistory] = useState<TelemetryData[]>([]);
   const [deviceState, setDeviceState] = useState<DeviceStateData | null>(null);
   const [recentCommands, setRecentCommands] = useState<CommandOut[]>([]);
+  const [loadErrors, setLoadErrors] = useState<DataSource[]>([]);
+  const [controlAccess, setControlAccess] = useState<ControlAccessState>("checking");
   const [lastChecked, setLastChecked] = useState<string>("Chưa kiểm tra");
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -202,70 +239,109 @@ export default function App() {
   const [isSending, setIsSending] = useState<boolean>(false);
 
   const commandPollRef = useRef<number | null>(null);
+  // Lets the command poll ask for a fresh load through the single-flight loop.
+  const reloadRef = useRef<(() => void) | null>(null);
 
   const refresh = useCallback(() => {
     setStatus(emptyStatus);
+    setControlAccess("checking");
     setRefreshKey((current) => current + 1);
   }, []);
 
-  // Poll system status, latest telemetry, device state and history
+  // Poll system status, telemetry, state, history, commands and control access.
+  //
+  // Ordering rules: one load at a time per effect (single-flight; a tick that
+  // arrives mid-load is queued, not run in parallel), and a refresh/device
+  // change aborts the old effect so its late responses are dropped.
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
+    let inFlight = false;
+    let queued = false;
 
     const loadData = async () => {
+      if (signal.aborted) return;
+      if (inFlight) {
+        queued = true;
+        return;
+      }
+      inFlight = true;
       try {
         const sysStatus = await fetchSystemStatus(signal);
-        if (!signal.aborted) {
-          setStatus(sysStatus);
-          setLastChecked(
-            new Intl.DateTimeFormat("vi-VN", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            }).format(new Date()),
-          );
+        if (signal.aborted) return;
+        setStatus(sysStatus);
+        setLastChecked(
+          new Intl.DateTimeFormat("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }).format(new Date()),
+        );
+
+        if (sysStatus.backend !== "online") {
+          setTelemetry(null);
+          setDeviceState(null);
+          setHistory([]);
+          setLoadErrors([]);
+          setControlAccess("unknown");
+          return;
         }
 
-        if (sysStatus.backend === "online") {
-          const [latest, state, hist, commands] = await Promise.all([
-            fetchLatestTelemetry(deviceId, signal).catch(() => null),
-            fetchDeviceState(deviceId, signal).catch(() => null),
-            fetchTelemetryHistory(deviceId, 20, "asc", signal).catch(() => []),
-            fetchRecentCommands(deviceId, 5, signal).catch(() => []),
-          ]);
+        // 404 means "no data yet" (null/[] from api.ts). Any other failure is
+        // an API error: keep the last good value (`undefined` = keep) and mark
+        // it as not updated instead of showing an empty or live garden.
+        const failed: DataSource[] = [];
+        const onError = (source: DataSource) => () => {
+          failed.push(source);
+          return undefined;
+        };
+        const [latest, state, hist, commands, access] = await Promise.all([
+          fetchLatestTelemetry(deviceId, signal).catch(onError("latest")),
+          fetchDeviceState(deviceId, signal).catch(onError("state")),
+          fetchTelemetryHistory(deviceId, 20, "asc", signal).catch(onError("history")),
+          fetchRecentCommands(deviceId, 5, signal).catch(onError("commands")),
+          // Its failure locks control but says nothing about backend health.
+          fetchControlAccess(signal).then(
+            (result): ControlAccessState => (result.commands_allowed ? "allowed" : "denied"),
+            (): ControlAccessState => "unknown",
+          ),
+        ]);
+        if (signal.aborted) return;
 
-          if (!signal.aborted) {
-            setTelemetry(latest);
-            setDeviceState(state);
-            setHistory(hist);
-            setRecentCommands(commands);
-          }
-        } else {
-          if (!signal.aborted) {
-            setTelemetry(null);
-            setDeviceState(null);
-            setHistory([]);
-          }
+        if (latest !== undefined) setTelemetry(latest);
+        if (state !== undefined) setDeviceState(state);
+        if (hist !== undefined) setHistory(hist);
+        if (commands !== undefined) {
+          setRecentCommands((current) => mergeCommands(commands, current));
         }
+        setControlAccess(access);
+        setLoadErrors(failed);
       } catch {
         if (!signal.aborted) {
           setStatus({ backend: "offline", database: "unavailable" });
           setTelemetry(null);
           setDeviceState(null);
           setHistory([]);
+          setLoadErrors([]);
+          setControlAccess("unknown");
+        }
+      } finally {
+        inFlight = false;
+        if (queued && !signal.aborted) {
+          queued = false;
+          void loadData();
         }
       }
     };
 
-    loadData();
-
-    // Regular polling
-    const timer = window.setInterval(loadData, POLL_INTERVAL_MS);
+    reloadRef.current = () => void loadData();
+    void loadData();
+    const timer = window.setInterval(() => void loadData(), POLL_INTERVAL_MS);
 
     return () => {
       controller.abort();
       window.clearInterval(timer);
+      reloadRef.current = null;
     };
   }, [deviceId, refreshKey]);
 
@@ -281,12 +357,16 @@ export default function App() {
 
     const commandId = activeCommand.command_id;
     let cancelled = false;
+    let consecutiveFailures = 0;
+    const controller = new AbortController();
 
     const poll = async () => {
       try {
-        const updated = await fetchCommand(commandId);
+        const updated = await fetchCommand(commandId, controller.signal);
         if (cancelled) return;
 
+        consecutiveFailures = 0;
+        setActionError(null);
         setActiveCommand(updated);
 
         // Update in recent list
@@ -295,16 +375,15 @@ export default function App() {
         );
 
         if (updated.status === "applied") {
+          // applied = matching ACK + state; it still does not prove water flow.
           setActionSuccess(
             updated.action === "pump_on"
-              ? `Thiết bị đã bật bơm thành công trong ${updated.params.duration_seconds ?? 10} giây!`
+              ? `Thiết bị đã bật bơm thành công trong ${updated.params.duration_seconds ?? 10} giây (ACK + state khớp lệnh).`
               : "Thiết bị đã xác nhận tắt bơm an toàn.",
           );
           setActionError(null);
-          // Refresh state to update relay display immediately
-          fetchDeviceState(deviceId)
-            .then((st) => setDeviceState(st))
-            .catch(() => {});
+          // Reload through the polling loop so this cannot race a newer state.
+          reloadRef.current?.();
         } else if (updated.status === "rejected") {
           const reasonText =
             (updated.reason && rejectReasonsVi[updated.reason]) ||
@@ -324,6 +403,13 @@ export default function App() {
           setActionError(
             err instanceof Error ? err.message : "Lỗi khi kiểm tra kết quả lệnh.",
           );
+          // Retry only status reads, with a bound. Refresh resumes after exhaustion.
+          consecutiveFailures += 1;
+          if (consecutiveFailures < 5) {
+            commandPollRef.current = window.setTimeout(poll, COMMAND_POLL_INTERVAL_MS);
+          } else {
+            setActionError("Mất kết nối khi theo dõi lệnh. Nhấn Làm mới để kiểm tra lại; không tự gửi lại lệnh.");
+          }
         }
       }
     };
@@ -332,14 +418,21 @@ export default function App() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       if (commandPollRef.current) {
         window.clearTimeout(commandPollRef.current);
       }
     };
-  }, [activeCommand, deviceId]);
+  }, [activeCommand, deviceId, refreshKey]);
+
+  const isBackendOnline = status.backend === "online";
+  const canControl = isBackendOnline && controlAccess === "allowed";
 
   // Handle send command
   const handleSendCommand = async (action: CommandAction) => {
+    // The buttons are disabled too; this guards stale handlers. Not security:
+    // the backend decides on every POST.
+    if (!canControl || isSending) return;
     setActionError(null);
     setActionSuccess(null);
     setIsSending(true);
@@ -360,9 +453,24 @@ export default function App() {
     }
   };
 
-  const isBackendOnline = status.backend === "online";
   const isPending = activeCommand?.status === "pending";
   const isPumpCurrentlyOn = deviceState?.relay_state === "on";
+  const telemetryError = loadErrors.includes("latest");
+  const stateError = loadErrors.includes("state");
+  // Values kept from an earlier poll after an API error are not live.
+  const telemetryOutdated = telemetry !== null && (telemetry.stale || telemetryError);
+  const stateOutdated = deviceState !== null && (deviceState.stale || stateError);
+  const controlNotice =
+    !isBackendOnline
+      ? null
+      : controlAccess === "denied"
+        ? REMOTE_CONTROL_NOTICE
+        : controlAccess === "unknown"
+          ? CONTROL_UNKNOWN_NOTICE
+          : controlAccess === "checking"
+            ? "Đang xác minh quyền điều khiển…"
+            : null;
+  const missingTelemetryText = telemetryError ? "Lỗi tải dữ liệu" : "Chưa có dữ liệu";
 
   // Data for sparkline
   const soilData = history
@@ -476,17 +584,36 @@ export default function App() {
                   </span>
                   <span
                     className={`badge-pill ${
-                      telemetry.stale ? "badge-stale" : "badge-live"
+                      telemetryOutdated ? "badge-stale" : "badge-live"
                     }`}
                   >
-                    {telemetry.stale ? "Dữ liệu cũ (Stale)" : "Trực tuyến"}
+                    {telemetryError
+                      ? "Chưa cập nhật (lỗi API)"
+                      : telemetry.stale
+                        ? "Dữ liệu cũ (Stale)"
+                        : "Trực tuyến"}
                   </span>
                 </>
               ) : (
-                <span className="data-badge">Chưa kết nối thiết bị</span>
+                <span className="data-badge">
+                  {telemetryError ? "Lỗi API telemetry" : "Chưa kết nối thiết bị"}
+                </span>
               )}
             </div>
           </div>
+
+          {loadErrors.length > 0 && (
+            <div className="feedback-banner error-banner" role="alert">
+              <span className="feedback-icon">!</span>
+              <span>
+                Không tải được {loadErrors.map((source) => dataSourceLabels[source]).join(", ")}{" "}
+                từ backend. Đây là lỗi API/kết nối, không phải thiết bị chưa gửi dữ liệu.
+                {(telemetryError && telemetry) || (stateError && deviceState)
+                  ? " Giá trị đang hiển thị là lần tải thành công gần nhất, không phải số đo realtime."
+                  : ""}
+              </span>
+            </div>
+          )}
 
           <div className="metrics-grid">
             {/* Card 1: Nhiệt độ */}
@@ -506,7 +633,9 @@ export default function App() {
                     </strong>
                   )
                 ) : (
-                  <strong>Chưa có dữ liệu</strong>
+                  <strong className={telemetryError ? "text-warning" : undefined}>
+                    {missingTelemetryText}
+                  </strong>
                 )}
                 <small>Cảm biến AHT20</small>
               </div>
@@ -529,7 +658,9 @@ export default function App() {
                     </strong>
                   )
                 ) : (
-                  <strong>Chưa có dữ liệu</strong>
+                  <strong className={telemetryError ? "text-warning" : undefined}>
+                    {missingTelemetryText}
+                  </strong>
                 )}
                 <small>Cảm biến AHT20</small>
               </div>
@@ -552,7 +683,9 @@ export default function App() {
                     </strong>
                   )
                 ) : (
-                  <strong>Chưa có dữ liệu</strong>
+                  <strong className={telemetryError ? "text-warning" : undefined}>
+                    {missingTelemetryText}
+                  </strong>
                 )}
                 <small>Cảm biến điện dung</small>
               </div>
@@ -562,7 +695,8 @@ export default function App() {
           {telemetry && (
             <div className="telemetry-meta-row">
               <span>
-                Cập nhật lúc: <strong>{formatTime(telemetry.received_at)}</strong>
+                {telemetryError ? "Số đo cuối cùng lúc" : "Cập nhật lúc"}:{" "}
+                <strong>{formatTime(telemetry.received_at)}</strong>
               </span>
               <span>
                 Đồng bộ giờ:{" "}
@@ -602,7 +736,11 @@ export default function App() {
                 <p className="eyebrow">Thiết bị chấp hành</p>
                 <h2>Máy bơm</h2>
               </div>
-              {deviceState ? (
+              {deviceState && stateOutdated ? (
+                <span className="neutral-pill" title="Trạng thái chưa được xác nhận hiện tại">
+                  {stateError ? "Chưa cập nhật" : "Trạng thái cũ"}: {isPumpCurrentlyOn ? "bật" : "tắt"}
+                </span>
+              ) : deviceState ? (
                 <span
                   className={`relay-pill ${
                     isPumpCurrentlyOn ? "relay-on" : "relay-off"
@@ -612,7 +750,9 @@ export default function App() {
                   {isPumpCurrentlyOn ? "ĐANG BẬT" : "ĐANG TẮT"}
                 </span>
               ) : (
-                <span className="neutral-pill">Chưa có dữ liệu</span>
+                <span className="neutral-pill">
+                  {stateError ? "Lỗi tải trạng thái" : "Chưa có dữ liệu"}
+                </span>
               )}
             </div>
 
@@ -643,6 +783,23 @@ export default function App() {
               </div>
             )}
 
+            {deviceState?.stale && !stateError && (
+              <p className="feedback-banner error-banner" role="status">
+                <span className="feedback-icon">!</span>
+                <span>
+                  Thiết bị chưa báo trạng thái trong {deviceState.stale_after_seconds} giây, có thể
+                  đang offline. Trạng thái bơm hiển thị là lần báo cuối, chưa xác nhận hiện tại.
+                </span>
+              </p>
+            )}
+
+            {controlNotice && (
+              <p className="feedback-banner error-banner" role="status" data-testid="control-notice">
+                <span className="feedback-icon">!</span>
+                <span>{controlNotice}</span>
+              </p>
+            )}
+
             {/* Duration Selector */}
             <div className="duration-selector">
               <label htmlFor={durationInputId} className="duration-label">
@@ -655,7 +812,7 @@ export default function App() {
                     type="button"
                     className={`preset-btn ${durationSeconds === preset ? "active" : ""}`}
                     onClick={() => setDurationSeconds(preset)}
-                    disabled={!isBackendOnline || isPending}
+                    disabled={!canControl || isPending}
                   >
                     {preset}s
                   </button>
@@ -679,7 +836,7 @@ export default function App() {
                       );
                     }
                   }}
-                  disabled={!isBackendOnline || isPending}
+                  disabled={!canControl || isPending}
                   aria-label="Số giây tưới"
                 />
                 <span className="input-unit">giây (1 – 120s)</span>
@@ -722,11 +879,13 @@ export default function App() {
                 type="button"
                 className="btn-pump-on"
                 onClick={() => handleSendCommand("pump_on")}
-                disabled={!isBackendOnline || isPending || isSending}
+                disabled={!canControl || isPending || isSending}
                 title={
                   !isBackendOnline
                     ? "Mất kết nối backend"
-                    : isPending
+                    : controlNotice
+                      ? controlNotice
+                      : isPending
                       ? "Đang có lệnh chờ xử lý"
                       : "Gửi lệnh bật máy bơm"
                 }
@@ -737,11 +896,13 @@ export default function App() {
                 type="button"
                 className="btn-pump-off"
                 onClick={() => handleSendCommand("pump_off")}
-                disabled={!isBackendOnline || isSending}
+                disabled={!canControl || isSending}
                 title={
                   !isBackendOnline
                     ? "Mất kết nối backend"
-                    : "Gửi lệnh dừng bơm khẩn cấp"
+                    : controlNotice
+                      ? controlNotice
+                      : "Gửi lệnh dừng bơm khẩn cấp"
                 }
               >
                 Tắt bơm
@@ -762,13 +923,8 @@ export default function App() {
                       </span>
                       <span className="command-time">{formatTime(cmd.created_at)}</span>
                       <span className={`command-status-badge status-${cmd.status}`}>
-                        {cmd.status === "applied"
-                          ? "Thành công"
-                          : cmd.status === "pending"
-                            ? "Đang chờ"
-                            : cmd.status === "rejected"
-                              ? "Từ chối"
-                              : "Hết hạn"}
+                        {commandStatusLabels[cmd.status]}
+                        {cmd.status === "timeout" && cmd.late_ack ? " · ACK đến trễ" : ""}
                       </span>
                     </li>
                   ))}

@@ -1,4 +1,6 @@
 # Local LAN demo override. Use only on a trusted Wi-Fi/hotspot.
+# This is the phone path that may control the pump; tunnelled/Internet
+# requests are read-only until the API has authentication (BC-02).
 services:
   mosquitto:
     ports: !override

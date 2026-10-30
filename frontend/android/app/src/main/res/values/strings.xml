@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Smart Garden</string>
+    <string name="title_activity_main">Smart Garden</string>
+    <string name="package_name">com.aiot.smartgarden</string>
+    <string name="custom_url_scheme">com.aiot.smartgarden</string>
+</resources>

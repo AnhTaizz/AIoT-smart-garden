@@ -1,0 +1,30 @@
+# Run against the real stack using isolated e2e_* device IDs.
+services:
+  regression-tests:
+    profiles: [tests]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.tests
+    environment:
+      E2E_API_BASE_URL: http://backend:8000
+      E2E_MQTT_HOST: mosquitto
+      E2E_PROXY_URL: http://frontend/api
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      DB_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+    volumes:
+      - ./simulator:/simulator:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    command: [sh, -c, "python -m pytest -q tests && cd /simulator && python -m unittest discover -s tests -v"]

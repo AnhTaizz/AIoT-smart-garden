@@ -32,6 +32,7 @@ class Settings:
     chat_temperature: float = 0.7
     chat_max_tokens: int = 1024
     chat_timeout_seconds: int = 120
+    cors_origins: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -63,6 +64,15 @@ class Settings:
             chat_temperature=temperature,
             chat_max_tokens=_int_env("CHAT_MAX_TOKENS", 1024),
             chat_timeout_seconds=_int_env("CHAT_TIMEOUT_SECONDS", 120),
+            cors_origins=tuple(
+                origin.strip().rstrip("/")
+                for origin in os.getenv(
+                    "CORS_ORIGINS",
+                    "http://localhost:5173,http://127.0.0.1:5173,"
+                    "https://localhost,capacitor://localhost",
+                ).split(",")
+                if origin.strip()
+            ),
         )
 
     def database_connection_parameters(self) -> dict[str, Any]:

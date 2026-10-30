@@ -145,7 +145,9 @@ Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/ready
 
 Cùng một codebase React được đóng gói bằng Capacitor Android (`frontend/android`). Web giữ `/api` cùng origin; app Android gọi **trực tiếp** backend qua URL HTTPS cấu hình lúc build (`VITE_API_URL` trong `frontend/.env.mobile.local`, không commit). Cách build/cài APK xem [frontend/README](frontend/README.md#app-android-capacitor).
 
-**Giới hạn an toàn:** API chưa có xác thực. Request đi qua tunnel/proxy công khai (Cloudflare Quick Tunnel, ngrok, …) chỉ được **đọc** telemetry/state/lịch sử lệnh và dùng chatbot; `POST /devices/{id}/commands` trả `403 remote_control_disabled`, dashboard khóa nút bơm và giải thích lý do. Vì app Android luôn đi qua URL HTTPS công khai, app hiện chỉ giám sát. Điều khiển bơm từ điện thoại dùng LAN demo ở trên. CORS (`CORS_ORIGINS`) chỉ là chính sách trình duyệt, không phải xác thực. Mở lại điều khiển từ xa là việc của BC-02 sau khi có kiểm soát truy cập.
+**Giới hạn an toàn:** API chưa có xác thực. Request đi qua tunnel/proxy công khai (Cloudflare Quick Tunnel, ngrok, …) chỉ được **đọc** telemetry/state/lịch sử lệnh và dùng chatbot; `POST /devices/{id}/commands` trả `403 remote_control_disabled`, dashboard khóa nút bơm và giải thích lý do. Vì app Android luôn đi qua URL HTTPS công khai, app hiện chỉ giám sát. Điều khiển bơm từ điện thoại dùng LAN demo ở trên. CORS (`CORS_ORIGINS`) chỉ là chính sách trình duyệt, không phải xác thực. Lớp chặn này chỉ nhận diện request qua tunnel/proxy có tự khai báo (header Cloudflare, `X-Forwarded-For`), không chống được mọi đường truy cập Internet; **Endpoint điều khiển chưa an toàn để công khai trực tiếp lên Internet.** Không public cổng API/MQTT/PostgreSQL. Mở lại điều khiển từ xa là việc của BC-02 sau khi có xác thực thật.
+
+Dashboard chỉ mở nút bơm khi backend online **và** `GET /control-access` trả rõ `commands_allowed: true`. Nếu endpoint lỗi, timeout hoặc trả dữ liệu lạ, nút bị khóa với thông báo "Không xác minh được quyền điều khiển"; trạng thái backend không bị đổi sang offline. Đây chỉ là UX, backend vẫn quyết định ở mỗi lệnh.
 
 ## Xem log
 

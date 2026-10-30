@@ -44,7 +44,14 @@ Qua dashboard dùng tiền tố `/api` (Nginx/Vite proxy); gọi trực tiếp F
 
 ### Lệnh bơm chỉ từ laptop/LAN (BC-01)
 
-API chưa có xác thực, nên `POST /devices/{id}/commands` trả **403 `remote_control_disabled`** (trước khi chạm DB/MQTT) nếu request mang dấu hiệu đi qua tunnel/proxy công khai: header `Cf-Connecting-Ip`/`Cf-Ray`/`CDN-Loop: cloudflare`, hoặc `X-Forwarded-For`/`Forwarded`/`X-Real-IP` chứa IP public hay giá trị không parse được, hoặc socket peer là IP public. Laptop, mạng Docker, LAN và dải CGNAT/VPN `100.64.0.0/10` vẫn gửi lệnh được. Đọc telemetry/state/command và `/chat` không bị chặn. Đây là rào chắn tạm, không phải xác thực: nó dựa vào việc proxy tự khai báo (Cloudflare luôn làm vậy); thêm header chỉ làm request bị hạn chế hơn nên không thể dùng để mở khóa. Một proxy công khai không gửi các header trên (ví dụ port-forward thẳng từ router) sẽ không bị nhận diện, vì vậy vẫn không public cổng API/MQTT.
+API chưa có xác thực, nên `POST /devices/{id}/commands` trả **403 `remote_control_disabled`** (trước khi chạm DB/MQTT) nếu request mang dấu hiệu đi qua tunnel/proxy công khai: header `Cf-Connecting-Ip`/`Cf-Ray`/`CDN-Loop: cloudflare`, hoặc `X-Forwarded-For`/`Forwarded`/`X-Real-IP` chứa địa chỉ ngoài danh sách local hay giá trị không parse được, hoặc socket peer nằm ngoài danh sách local. Danh sách local tường minh: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1`, `fc00::/7`, `fe80::/10`. Mọi địa chỉ khác, kể cả dải CGNAT/VPN `100.64.0.0/10` (ví dụ Tailscale) và IPv6 global, bị coi là remote. Laptop, mạng Docker và LAN IPv4 vẫn gửi lệnh được. Đọc telemetry/state/command và `/chat` không bị chặn.
+
+**Endpoint điều khiển chưa an toàn để công khai trực tiếp lên Internet.** Đây là rào chắn tạm, **không phải xác thực**:
+
+- Header do client gửi không bao giờ được coi là bằng chứng tin cậy. Header chỉ có thể làm request bị hạn chế hơn; thiếu header không chứng minh người gọi là ai.
+- Lớp này dựa vào việc proxy tự khai báo (Cloudflare luôn thêm `Cf-Connecting-Ip`/`Cf-Ray`). Các đường không để lại dấu hiệu, ví dụ port-forward từ router qua NAT viết lại địa chỉ nguồn, hoặc bất kỳ ai đã ở trong LAN/hotspot, **không** bị nhận diện.
+- Vì vậy không public cổng API/MQTT/PostgreSQL, chỉ dùng LAN tin cậy để điều khiển. Xác thực thật thuộc BC-02.
+- Điện thoại trong LAN truy cập qua địa chỉ IPv6 global sẽ bị coi là remote (fail closed); LAN demo dùng IPv4 (`compose.lan.yaml` chỉ bind `0.0.0.0`).
 
 Mọi lỗi dùng chung một dạng, kể cả 422:
 

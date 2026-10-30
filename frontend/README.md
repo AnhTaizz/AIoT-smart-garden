@@ -7,7 +7,8 @@ Một codebase React + TypeScript strict + Vite dùng cho Web (Nginx trong Docke
 - Phân biệt **chưa có dữ liệu** (API trả 404) với **lỗi API** (5xx/mất kết nối): lỗi API hiện cảnh báo `role="alert"` và `Lỗi tải dữ liệu`.
 - Trạng thái bơm do thiết bị tự báo; khi state đã cũ hiển thị `Trạng thái cũ: bật/tắt` và cảnh báo thiết bị có thể offline.
 - Điều khiển bơm theo vòng đời `pending → applied/rejected/timeout`. HTTP 202 chỉ là `pending`; chỉ báo thành công khi backend `applied` (ACK + state khớp `command_id`). ACK đến sau `timeout` hiển thị `Hết thời gian chờ · ACK đến trễ`, không đổi thành thành công.
-- Khi `GET /control-access` báo `commands_allowed: false` (request đi qua tunnel/Internet), nút bơm bị khóa kèm giải thích; backend vẫn tự chặn bằng `403 remote_control_disabled`.
+- Quyền điều khiển mặc định **khóa**: nút bơm chỉ mở khi backend online và `GET /control-access` trả đúng `{"commands_allowed": true, "reason": null}`. `commands_allowed: false` → "Điều khiển bơm từ xa đang tắt"; lỗi mạng, HTTP lỗi, timeout 10 giây hoặc payload lạ → "Không xác minh được quyền điều khiển" (backend vẫn hiển thị online). Đây chỉ là UX; backend tự chặn bằng `403 remote_control_disabled`.
+- Polling single-flight: mỗi lần chỉ một lượt tải; tick 5 giây đến giữa lượt đang chạy được xếp hàng một lần; Làm mới hủy lượt cũ bằng `AbortController` nên response cũ không ghi đè dữ liệu mới. Lỗi API (không phải 404) giữ giá trị hợp lệ cuối cùng nhưng gắn nhãn "Chưa cập nhật (lỗi API)"/"Chưa cập nhật: bật/tắt", không hiển thị như realtime.
 - Mất mạng khi theo dõi lệnh: chỉ thử lại các request **GET** trạng thái (tối đa 5 lần liên tiếp), không bao giờ tự gửi lại `POST` bật bơm. Mỗi request API (trừ chat) tự hủy sau 10 giây.
 - Nút nổi **Trợ lý nông nghiệp**: chat nhiều lượt qua `/chat`, render Markdown an toàn, bật/tắt gửi dữ liệu vườn. Chatbot không có quyền điều khiển bơm. Xem [hướng dẫn chatbot](../docs/CHATBOT.md).
 

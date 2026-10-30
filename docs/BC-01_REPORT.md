@@ -88,7 +88,7 @@ Ghi chú môi trường: để build image trong container này phải tạo t�
 
 - **Blocker:** chưa có Android SDK/Google Maven trong môi trường này nên APK chưa được build lại sau khi tích hợp; Kaggle/ngrok không truy cập được từ đây.
 - **Cần nhóm quyết định:** PR #4 ghi G02 AGREED và M1 Web/LAN đã nghiệm thu (2026-09-29) nhưng chưa merge; `main` vẫn DRAFT. BC-01 không tự đổi. Nếu nhóm đã xác nhận thật, cần một PR tài liệu riêng có xác nhận của Thành/Tài/Toản.
-- **Rủi ro bảo mật:** rào chắn tunnel dựa vào việc proxy tự khai báo header. Port-forward thẳng từ router không bị nhận diện. API đọc dữ liệu và `/chat` vẫn mở cho ai biết URL tunnel; `/chat` có thể làm tốn tài nguyên Kaggle. MQTT anonymous.
+- **Rủi ro bảo mật:** endpoint điều khiển **chưa an toàn để công khai trực tiếp lên Internet**. Rào chắn tunnel dựa vào việc proxy tự khai báo header; header client gửi không bao giờ là bằng chứng tin cậy. Port-forward từ router qua NAT viết lại địa chỉ nguồn, hoặc người đã ở trong LAN, không bị nhận diện. API đọc dữ liệu và `/chat` vẫn mở cho ai biết URL tunnel; `/chat` có thể làm tốn tài nguyên Kaggle. MQTT anonymous.
 - **Technical debt:** `CHAT_API_URL` mặc định là URL ngrok cố định trong code/compose, nên để rỗng và báo "chưa cấu hình"; URL Quick Tunnel đổi sau mỗi lần khởi động lại nên phải build lại APK; `CORS_ORIGINS` đọc lúc import module; iOS scaffold còn ở PR #4; polling REST thay vì WebSocket; script tunnel chỉ có PowerShell.
 - **PR #4:** sau khi BC-01 được review, PR #4 nên đóng hoặc thu gọn chỉ còn phần tài liệu cần nhóm quyết định, tránh merge đè lên chatbot.
 
@@ -99,3 +99,35 @@ Ghi chú môi trường: để build image trong container này phải tạo t�
 3. Cấu hình URL backend cho app lúc chạy (không phải build lại APK khi tunnel đổi), hoặc dùng named tunnel ổn định.
 4. MQTT username/password và ACL theo `device_id` trước khi ESP32 thật (phối hợp A).
 5. Chạy phiên M1 đầy đủ trên smartphone LAN và ghi bằng chứng; Android 4G read-only theo mục 5.
+
+## 8. BC-01.1 — Sửa sau review (2026-10-30)
+
+Làm trên cùng nhánh, không làm lại từ `main`, không cherry-pick lại PR #4.
+
+### Lỗi phát hiện và cách sửa
+
+| # | Lỗi | Cách sửa |
+| --- | --- | --- |
+| 1 | UI **fail-open**: khi `/control-access` lỗi hoặc trả lạ, `fetchControlAccess` trả `null` và nút bơm vẫn mở (chỉ khóa khi nhận đúng `false`) | Trạng thái quyền `checking/allowed/denied/unknown`, mặc định `checking`. Nút chỉ mở khi backend online **và** nhận đúng `{"commands_allowed": true, "reason": null}`. `fetchControlAccess` ném lỗi khi lỗi mạng, timeout 10 giây, HTTP lỗi hoặc payload lạ → hiển thị "Không xác minh được quyền điều khiển". Lỗi endpoint này không đổi trạng thái backend. `handleSendCommand` kiểm tra lại `canControl` |
+| 2 | `setInterval` có thể khởi động lượt tải mới khi lượt trước còn chạy (request tới 10 giây), các lượt ghi đè state ngoài thứ tự | Single-flight: mỗi effect chỉ một lượt tải, tick đến giữa chừng được xếp hàng đúng một lần. Làm mới/đổi thiết bị/unmount hủy effect cũ bằng `AbortController`, response muộn bị bỏ |
+| 3 | Khi lệnh `applied`, poll lệnh gọi thẳng `fetchDeviceState` ngoài vòng polling, có thể đua với state mới hơn và ghi state sau unmount | Gọi lại vòng polling single-flight qua `reloadRef` |
+| 4 | Danh sách lệnh cũ từ poll có thể đưa lệnh đã `applied/timeout` quay về `pending` | `mergeCommands`: trạng thái chỉ đi `pending → final`, không lùi |
+| 5 | Lỗi API (không phải 404) xóa số đo; hoặc nếu giữ lại thì có thể bị trình bày như realtime | Giữ giá trị hợp lệ cuối, gắn nhãn "Chưa cập nhật (lỗi API)" / "Chưa cập nhật: bật/tắt", "Số đo cuối cùng lúc", và cảnh báo "không phải số đo realtime". 404 vẫn là "Chưa có dữ liệu" |
+| 6 | `access.py` dùng `is_global`, nên dải CGNAT/VPN `100.64.0.0/10` (ví dụ Tailscale, một đường vào từ Internet) được coi là local | Danh sách mạng local tường minh (loopback, RFC 1918, link-local, IPv6 ULA); mọi địa chỉ khác là remote (fail closed). Docstring và tài liệu nói rõ đây không phải xác thực |
+
+Đã rà lại `access.py`/`main.py`: kiểm tra quyền vẫn là dòng đầu của `create_command`, trước validate thời lượng, kiểm tra broker, DB và publish. `schemas.py`, `mqtt_bridge.py`, `ingest.py`, `repository.py`, migration, simulator và firmware **không đổi** so với `main` (`git diff --stat origin/main` rỗng). Contract MQTT G02 và vòng đời command giữ nguyên.
+
+### Bằng chứng kiểm thử (sau khi sửa)
+
+| Kiểm thử | Kết quả |
+| --- | --- |
+| Compose config base / `+lan` / `+device` / `+test --profile tests` | Parse OK |
+| Regression service trên stack thật | **167 pass, 2 skip** (live Kaggle). 129 unit (`test_access.py` 26) + 38 E2E (PostgreSQL, Mosquitto, backend, Nginx thật) |
+| Simulator | 31/31 OK |
+| Frontend `npm test` | **53/53** (thêm 18): `/control-access` trả 500, lỗi mạng, timeout 10 giây (fake timers), payload rỗng/sai kiểu/có reason lạ/null/không phải JSON → khóa, backend vẫn "Đang hoạt động", 0 POST; check treo → "Đang xác minh…" rồi chỉ mở khi allow rõ ràng; check lỗi ở lượt sau → khóa lại; response chậm trước Làm mới không ghi đè dữ liệu mới (deferred); 3 tick trong lúc poll chậm chỉ tạo đúng 1 lượt tiếp theo; lỗi API giữ số đo cũ nhưng không hiện "Trực tuyến"/"ĐANG TẮT"; unmount không còn request/ghi state; timeout/rejected không gửi lại POST |
+| Kiểm tra đột biến | Cố ý bỏ single-flight, bỏ kiểm tra abort, đổi quyền thành fail-open, xóa dữ liệu khi lỗi → mỗi đột biến đều làm test tương ứng fail; code gốc đã khôi phục |
+| `npm run build` | TypeScript + Vite OK |
+| Phiên UI thật (Chromium headless, simulator `node_01` mô phỏng) | online: không có cảnh báo quyền, nút mở; pending → applied cùng `command_id`, relay `on`; `pump_off` applied. denied (header Cloudflare, viewport mobile): backend online, nút khóa, 0 POST. unknown (chặn `/api/control-access` ở trình duyệt bằng 500 / ngắt mạng / payload sai): backend vẫn "Đang hoạt động", telemetry "Trực tuyến", nút khóa, 0 POST kể cả khi click cưỡng bức. rejected `clock_unsynced`. timeout khi dừng simulator, nhãn "Hết thời gian chờ", sau đó "Trạng thái cũ: tắt" + "Dữ liệu cũ (Stale)", chỉ 1 POST. offline (dừng container backend): "Mất kết nối", nút khóa |
+| APK Android, điện thoại thật, Kaggle Qwen3 thật | **CHƯA KIỂM TRA** (như mục 4–5) |
+
+Rủi ro còn lại: như mục 6. Ngoài ra trạng thái `unknown` khiến người dùng LAN không bấm được bơm khi `/control-access` lỗi tạm thời; đây là lựa chọn an toàn có chủ ý, có nút Làm mới để thử lại.

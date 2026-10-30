@@ -31,13 +31,13 @@ Cập nhật: 2026-10-30 trên nhánh `feat/bc-01-mobile-chat-integration` (BC-0
 | Build/khởi động Compose | PASS có điều kiện | Build từ root repo; bốn container healthy khi dùng PostgreSQL host port `55432` |
 | `GET /health` | PASS | HTTP 200 khi PostgreSQL chạy và khi PostgreSQL dừng |
 | `GET /ready` | PASS | HTTP 200 khi DB chạy; HTTP 503 khi DB dừng; phục hồi về 200 sau khi DB chạy lại |
-| Frontend | PASS thành phần | 2026-10-30 nhánh BC-01: Vitest 35/35, TypeScript + Vite build; image Docker frontend build và healthy |
+| Frontend | PASS thành phần | 2026-10-30 nhánh BC-01 (sau BC-01.1): Vitest 53/53, TypeScript + Vite build; image Docker frontend build và healthy |
 | Development bind | PASS runtime | Base `compose.yaml`: bốn container healthy, cả bốn cổng bind `127.0.0.1` |
 | LAN demo override | PASS runtime | `compose.lan.yaml`: bốn container healthy; chỉ dashboard `5173` và MQTT `1883` bind `0.0.0.0`; API/PostgreSQL vẫn ở `127.0.0.1` |
 | Smartphone/ESP32 qua LAN thật | CHƯA KIỂM TRA | Chưa có điện thoại/ESP32 và mạng demo trong phiên kiểm tra này |
 | App Android (Capacitor) | Build CHƯA KIỂM TRA lại | `build:mobile` và `cap sync android` OK; `gradlew assembleDebug` không chạy được vì môi trường kiểm tra bị chặn `dl.google.com`. Chưa cài lên điện thoại trong BC-01 |
 | Chatbot | PASS thành phần | Unit `test_chat.py` và phiên React → Nginx → FastAPI → `ai/kaggle_server.py` với engine STUB; Kaggle Qwen3 thật CHƯA KIỂM TRA (ngrok bị chặn trong môi trường) |
-| Backend unit test | PASS thành phần | 2026-10-30 nhánh BC-01: 125/125 (validation, chat, CORS, chặn từ xa) trên Python 3.12 trong container |
+| Backend unit test | PASS thành phần | 2026-10-30 nhánh BC-01 (sau BC-01.1): 129/129 (validation, chat, CORS, chặn từ xa) trên Python 3.12 trong container |
 | Backend E2E | PASS thành phần | 2026-10-30 nhánh BC-01: 38 pass với PostgreSQL, Mosquitto, backend và Nginx thật; 2 test live Kaggle bị skip (cần `E2E_CHAT_LIVE=1`) |
 | Simulator unit test | PASS thành phần | 31/31 test (chạy lại 2026-10-30) cho config, payload, expiry/clock, duplicate, busy, STOP ordering, reboot và disconnect; không skip |
 | Simulator ↔ MQTT ↔ backend | PASS thành phần | Simulator thật nhận ON thành `applied/on`; sau khi broker dừng/khởi động lại báo state mới `off`; phát lại chính ON cũ vẫn `off` |
@@ -100,3 +100,4 @@ Trước khi nghiệm thu M1, cả nhóm hoàn thiện thông tin còn thiếu t
 - 2026-09-25: hoàn thiện bản đề xuất G02 cho hạn tuyệt đối, bằng chứng ACK+state, boot đích và thứ tự STOP; thêm simulator hai chiều. Unit backend 51/51, simulator 29/29, E2E backend 26/26 và một phiên simulator thật hai chiều PASS. G02 vẫn DRAFT; M1 vẫn chưa nghiệm thu vì thiếu UI, smartphone và xác nhận nhóm.
 - 2026-09-26: kiểm tra lại code PR #2 tại `6ba6eb46`: backend unit 51/51, simulator 31/31, E2E thật 33/33, không có test skip. Ba regression về disconnect, bằng chứng sau hạn và ACK accepted đến sau applied đều PASS; phiên broker thật xác nhận reconnect/duplicate ON giữ relay `off`. G02 vẫn DRAFT và M1 vẫn chưa nghiệm thu; bàn giao tiếp cho Toản làm C-W1.
 - 2026-10-30: BC-01 trên `feat/bc-01-mobile-chat-integration`: audit lại repo (PR #2/#3/#5 đã merge, PR #4 còn mở), tích hợp phần code Capacitor Android/CORS/API HTTPS của PR #4 vào `main` mới nhất mà giữ chatbot, chặn lệnh bơm qua tunnel/Internet và sửa UI để phân biệt lỗi API/chưa có dữ liệu/state cũ. Backend unit 125/125, E2E thật 38 pass (2 live Kaggle skip), simulator 31/31, frontend 35/35 + build. APK, smartphone thật và Kaggle thật chưa kiểm tra. G02 vẫn DRAFT trên `main`; M1 vẫn chưa nghiệm thu.
+- 2026-10-30: BC-01.1 trên cùng nhánh: UI khóa điều khiển khi chưa xác minh được quyền (fail closed), polling single-flight + hủy request cũ, giữ số đo cũ khi lỗi API nhưng gắn nhãn chưa cập nhật, rào chắn remote dùng danh sách mạng local tường minh. Backend unit 129/129, E2E thật 38 pass (2 live Kaggle skip), simulator 31/31, frontend 53/53 + build, phiên UI thật cho online/denied/unknown/pending/applied/rejected/timeout/stale/offline. APK, smartphone thật và Kaggle thật vẫn chưa kiểm tra; M1 vẫn chưa nghiệm thu.

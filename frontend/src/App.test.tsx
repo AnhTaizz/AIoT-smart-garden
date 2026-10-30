@@ -56,6 +56,14 @@ function setupMockFetch(overrides: Record<string, unknown> = {}) {
       });
     }
 
+    if (urlStr.endsWith("/control-access")) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => overrides["/control-access"] ?? { commands_allowed: true, reason: null },
+      });
+    }
+
     if (urlStr.includes("/devices/node_01/latest")) {
       if (overrides["/latest"] === null) {
         return Promise.resolve({
@@ -307,7 +315,7 @@ describe("Dashboard", () => {
     await waitFor(
       () => {
         expect(
-          screen.getByText("Thiết bị đã bật bơm thành công trong 10 giây!"),
+          screen.getByText("Thiết bị đã bật bơm thành công trong 10 giây (ACK + state khớp lệnh)."),
         ).toBeInTheDocument();
       },
       { timeout: 3000 },
@@ -402,5 +410,87 @@ describe("Remote command lifecycle", () => {
     await waitFor(() => expect(screen.getByText(/Thiết bị đã bật bơm thành công/)).toBeInTheDocument(), {timeout: 4000});
     expect(reads).toBe(2);
     expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+});
+
+
+describe("B/C state distinctions", () => {
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("locks pump buttons when the backend reports remote control disabled", async () => {
+    const mock = setupMockFetch({"/control-access": {commands_allowed: false, reason: "remote_control_disabled"}});
+    vi.stubGlobal("fetch", mock);
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Điều khiển bơm từ xa đang tắt/)).toBeInTheDocument());
+    // Read-only data stays visible.
+    expect(screen.getByText("28.4")).toBeInTheDocument();
+    expect(screen.getByRole("button", {name: "Bật bơm"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Tắt bơm"})).toBeDisabled();
+    expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
+
+  it("shows the backend 403 message if a remote command is still refused", async () => {
+    const base = setupMockFetch();
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve({ok: false, status: 403, json: async () => ({detail: {
+          code: "remote_control_disabled",
+          message: "Điều khiển bơm qua Internet đang tắt vì API chưa có xác thực.",
+        }})});
+      }
+      return base(url, init);
+    }));
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
+    await waitFor(() => expect(screen.getByText(/qua Internet đang tắt/)).toBeInTheDocument());
+    expect(screen.queryByText(/Đang đợi ACK/)).not.toBeInTheDocument();
+  });
+
+  it("distinguishes an API failure from a device that has not sent data", async () => {
+    const base = setupMockFetch();
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      if (String(url).includes("/devices/node_01/latest")) {
+        return Promise.resolve({ok: false, status: 503, json: async () => ({detail: {code: "database_unavailable"}})});
+      }
+      return base(url, init);
+    }));
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Không tải được số đo mới nhất/));
+    expect(screen.getAllByText("Lỗi tải dữ liệu")).toHaveLength(3);
+    expect(screen.getByText("Lỗi API telemetry")).toBeInTheDocument();
+  });
+
+  it("shows no-data (404) without an API error", async () => {
+    vi.stubGlobal("fetch", setupMockFetch({"/latest": null, "/state": null}));
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Chưa kết nối thiết bị")).toBeInTheDocument());
+    expect(screen.getAllByText("Chưa có dữ liệu").length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("marks a stale device state as unconfirmed instead of live", async () => {
+    vi.stubGlobal("fetch", setupMockFetch({
+      "/state": {...mockDeviceState, relay_state: "on", stale: true},
+      "/latest": {...mockTelemetry, stale: true, simulated: false},
+    }));
+    render(<App />);
+    await waitFor(() => expect(screen.getByText("Trạng thái cũ: bật")).toBeInTheDocument());
+    expect(screen.queryByText("ĐANG BẬT")).not.toBeInTheDocument();
+    expect(screen.getByText(/có thể\s+đang offline/)).toBeInTheDocument();
+    expect(screen.getByText("Dữ liệu cũ (Stale)")).toBeInTheDocument();
+    expect(screen.getByText("Thiết bị thật")).toBeInTheDocument();
+  });
+
+  it("labels timeout separately and flags a late ACK without calling it applied", async () => {
+    vi.stubGlobal("fetch", setupMockFetch({"/commands": {device_id: "node_01", count: 1, items: [{
+      command_id: "cmd-late", device_id: "node_01", command_sequence: 3, action: "pump_on",
+      params: {duration_seconds: 5}, status: "timeout", device_ack: null, reason: null,
+      created_at: "2026-09-29T04:00:00.000Z", expires_at: "2026-09-29T04:00:15.000Z",
+      late_ack: "applied", late_ack_at: "2026-09-29T04:00:20.000Z",
+    }]}}));
+    render(<App />);
+    await waitFor(() => expect(screen.getByText(/Hết thời gian chờ · ACK đến trễ/)).toBeInTheDocument());
+    expect(screen.queryByText("Thành công")).not.toBeInTheDocument();
   });
 });

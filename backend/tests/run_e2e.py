@@ -29,6 +29,7 @@ def main() -> int:
         "E2E_MQTT_HOST": "127.0.0.1",
         "E2E_MQTT_PORT": values.get("MQTT_PORT", "1883"),
         "E2E_CHAT_PROXY_URL": "http://127.0.0.1:" + values.get("FRONTEND_PORT", "5173") + "/api",
+        "E2E_PROXY_URL": "http://127.0.0.1:" + values.get("FRONTEND_PORT", "5173") + "/api",
         "DB_HOST": "127.0.0.1", "DB_PORT": values.get("POSTGRES_PORT", "5432"),
         "DB_NAME": values["POSTGRES_DB"], "DB_USER": values["POSTGRES_USER"], "DB_PASSWORD": values["POSTGRES_PASSWORD"],
     }

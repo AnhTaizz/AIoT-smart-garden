@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import ChatAssistant from "./ChatAssistant";
 import {
   fetchCommand,
+  fetchControlAccess,
   fetchDeviceState,
   fetchLatestTelemetry,
   fetchRecentCommands,
@@ -11,6 +12,7 @@ import {
   type BackendStatus,
   type CommandAction,
   type CommandOut,
+  type ControlAccess,
   type DatabaseStatus,
   type DeviceStateData,
   type SystemStatus,
@@ -60,6 +62,25 @@ const rejectReasonsVi: Record<string, string> = {
 };
 
 const durationPresets = [5, 10, 30, 60];
+
+type DataSource = "latest" | "state" | "history" | "commands";
+
+const dataSourceLabels: Record<DataSource, string> = {
+  latest: "số đo mới nhất",
+  state: "trạng thái thiết bị",
+  history: "lịch sử telemetry",
+  commands: "lịch sử lệnh",
+};
+
+const commandStatusLabels: Record<CommandOut["status"], string> = {
+  applied: "Thành công",
+  pending: "Đang chờ",
+  rejected: "Từ chối",
+  timeout: "Hết thời gian chờ",
+};
+
+const REMOTE_CONTROL_NOTICE =
+  "Điều khiển bơm từ xa đang tắt: API chưa có xác thực nên chỉ nhận lệnh từ laptop hoặc mạng LAN tin cậy. Bạn vẫn xem được số đo và trạng thái.";
 
 function StatusDot({ state }: { state: BackendStatus | DatabaseStatus }) {
   return <span aria-hidden="true" className={`status-dot status-${state}`} />;
@@ -191,6 +212,8 @@ export default function App() {
   const [history, setHistory] = useState<TelemetryData[]>([]);
   const [deviceState, setDeviceState] = useState<DeviceStateData | null>(null);
   const [recentCommands, setRecentCommands] = useState<CommandOut[]>([]);
+  const [loadErrors, setLoadErrors] = useState<DataSource[]>([]);
+  const [controlAccess, setControlAccess] = useState<ControlAccess | null>(null);
   const [lastChecked, setLastChecked] = useState<string>("Chưa kiểm tra");
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -228,11 +251,19 @@ export default function App() {
         }
 
         if (sysStatus.backend === "online") {
-          const [latest, state, hist, commands] = await Promise.all([
-            fetchLatestTelemetry(deviceId, signal).catch(() => null),
-            fetchDeviceState(deviceId, signal).catch(() => null),
-            fetchTelemetryHistory(deviceId, 20, "asc", signal).catch(() => []),
-            fetchRecentCommands(deviceId, 5, signal).catch(() => []),
+          // 404 means "no data yet" (handled in api.ts); anything else is an
+          // API failure and must not be shown as an empty garden.
+          const failed: DataSource[] = [];
+          const onError = <T,>(source: DataSource, fallback: T) => () => {
+            failed.push(source);
+            return fallback;
+          };
+          const [latest, state, hist, commands, access] = await Promise.all([
+            fetchLatestTelemetry(deviceId, signal).catch(onError("latest", null)),
+            fetchDeviceState(deviceId, signal).catch(onError("state", null)),
+            fetchTelemetryHistory(deviceId, 20, "asc", signal).catch(onError("history", [])),
+            fetchRecentCommands(deviceId, 5, signal).catch(onError("commands", [])),
+            fetchControlAccess(signal),
           ]);
 
           if (!signal.aborted) {
@@ -240,12 +271,15 @@ export default function App() {
             setDeviceState(state);
             setHistory(hist);
             setRecentCommands(commands);
+            setControlAccess(access);
+            setLoadErrors(failed);
           }
         } else {
           if (!signal.aborted) {
             setTelemetry(null);
             setDeviceState(null);
             setHistory([]);
+            setLoadErrors([]);
           }
         }
       } catch {
@@ -254,6 +288,7 @@ export default function App() {
           setTelemetry(null);
           setDeviceState(null);
           setHistory([]);
+          setLoadErrors([]);
         }
       }
     };
@@ -299,9 +334,10 @@ export default function App() {
         );
 
         if (updated.status === "applied") {
+          // applied = matching ACK + state; it still does not prove water flow.
           setActionSuccess(
             updated.action === "pump_on"
-              ? `Thiết bị đã bật bơm thành công trong ${updated.params.duration_seconds ?? 10} giây!`
+              ? `Thiết bị đã bật bơm thành công trong ${updated.params.duration_seconds ?? 10} giây (ACK + state khớp lệnh).`
               : "Thiết bị đã xác nhận tắt bơm an toàn.",
           );
           setActionError(null);
@@ -375,6 +411,11 @@ export default function App() {
   const isBackendOnline = status.backend === "online";
   const isPending = activeCommand?.status === "pending";
   const isPumpCurrentlyOn = deviceState?.relay_state === "on";
+  const isRemoteLocked = controlAccess?.commands_allowed === false;
+  const canControl = isBackendOnline && !isRemoteLocked;
+  const telemetryError = loadErrors.includes("latest");
+  const stateError = loadErrors.includes("state");
+  const missingTelemetryText = telemetryError ? "Lỗi tải dữ liệu" : "Chưa có dữ liệu";
 
   // Data for sparkline
   const soilData = history
@@ -495,10 +536,22 @@ export default function App() {
                   </span>
                 </>
               ) : (
-                <span className="data-badge">Chưa kết nối thiết bị</span>
+                <span className="data-badge">
+                  {telemetryError ? "Lỗi API telemetry" : "Chưa kết nối thiết bị"}
+                </span>
               )}
             </div>
           </div>
+
+          {loadErrors.length > 0 && (
+            <div className="feedback-banner error-banner" role="alert">
+              <span className="feedback-icon">!</span>
+              <span>
+                Không tải được {loadErrors.map((source) => dataSourceLabels[source]).join(", ")}{" "}
+                từ backend. Đây là lỗi API/kết nối, không phải thiết bị chưa gửi dữ liệu.
+              </span>
+            </div>
+          )}
 
           <div className="metrics-grid">
             {/* Card 1: Nhiệt độ */}
@@ -518,7 +571,9 @@ export default function App() {
                     </strong>
                   )
                 ) : (
-                  <strong>Chưa có dữ liệu</strong>
+                  <strong className={telemetryError ? "text-warning" : undefined}>
+                    {missingTelemetryText}
+                  </strong>
                 )}
                 <small>Cảm biến AHT20</small>
               </div>
@@ -541,7 +596,9 @@ export default function App() {
                     </strong>
                   )
                 ) : (
-                  <strong>Chưa có dữ liệu</strong>
+                  <strong className={telemetryError ? "text-warning" : undefined}>
+                    {missingTelemetryText}
+                  </strong>
                 )}
                 <small>Cảm biến AHT20</small>
               </div>
@@ -564,7 +621,9 @@ export default function App() {
                     </strong>
                   )
                 ) : (
-                  <strong>Chưa có dữ liệu</strong>
+                  <strong className={telemetryError ? "text-warning" : undefined}>
+                    {missingTelemetryText}
+                  </strong>
                 )}
                 <small>Cảm biến điện dung</small>
               </div>
@@ -614,7 +673,11 @@ export default function App() {
                 <p className="eyebrow">Thiết bị chấp hành</p>
                 <h2>Máy bơm</h2>
               </div>
-              {deviceState ? (
+              {deviceState && deviceState.stale ? (
+                <span className="neutral-pill" title="Thiết bị chưa báo trạng thái mới">
+                  Trạng thái cũ: {isPumpCurrentlyOn ? "bật" : "tắt"}
+                </span>
+              ) : deviceState ? (
                 <span
                   className={`relay-pill ${
                     isPumpCurrentlyOn ? "relay-on" : "relay-off"
@@ -624,7 +687,9 @@ export default function App() {
                   {isPumpCurrentlyOn ? "ĐANG BẬT" : "ĐANG TẮT"}
                 </span>
               ) : (
-                <span className="neutral-pill">Chưa có dữ liệu</span>
+                <span className="neutral-pill">
+                  {stateError ? "Lỗi tải trạng thái" : "Chưa có dữ liệu"}
+                </span>
               )}
             </div>
 
@@ -655,6 +720,23 @@ export default function App() {
               </div>
             )}
 
+            {deviceState?.stale && (
+              <p className="feedback-banner error-banner" role="status">
+                <span className="feedback-icon">!</span>
+                <span>
+                  Thiết bị chưa báo trạng thái trong {deviceState.stale_after_seconds} giây, có thể
+                  đang offline. Trạng thái bơm hiển thị là lần báo cuối, chưa xác nhận hiện tại.
+                </span>
+              </p>
+            )}
+
+            {isRemoteLocked && (
+              <p className="feedback-banner error-banner" role="status">
+                <span className="feedback-icon">!</span>
+                <span>{REMOTE_CONTROL_NOTICE}</span>
+              </p>
+            )}
+
             {/* Duration Selector */}
             <div className="duration-selector">
               <label htmlFor={durationInputId} className="duration-label">
@@ -667,7 +749,7 @@ export default function App() {
                     type="button"
                     className={`preset-btn ${durationSeconds === preset ? "active" : ""}`}
                     onClick={() => setDurationSeconds(preset)}
-                    disabled={!isBackendOnline || isPending}
+                    disabled={!canControl || isPending}
                   >
                     {preset}s
                   </button>
@@ -691,7 +773,7 @@ export default function App() {
                       );
                     }
                   }}
-                  disabled={!isBackendOnline || isPending}
+                  disabled={!canControl || isPending}
                   aria-label="Số giây tưới"
                 />
                 <span className="input-unit">giây (1 – 120s)</span>
@@ -734,11 +816,13 @@ export default function App() {
                 type="button"
                 className="btn-pump-on"
                 onClick={() => handleSendCommand("pump_on")}
-                disabled={!isBackendOnline || isPending || isSending}
+                disabled={!canControl || isPending || isSending}
                 title={
                   !isBackendOnline
                     ? "Mất kết nối backend"
-                    : isPending
+                    : isRemoteLocked
+                      ? REMOTE_CONTROL_NOTICE
+                      : isPending
                       ? "Đang có lệnh chờ xử lý"
                       : "Gửi lệnh bật máy bơm"
                 }
@@ -749,11 +833,13 @@ export default function App() {
                 type="button"
                 className="btn-pump-off"
                 onClick={() => handleSendCommand("pump_off")}
-                disabled={!isBackendOnline || isSending}
+                disabled={!canControl || isSending}
                 title={
                   !isBackendOnline
                     ? "Mất kết nối backend"
-                    : "Gửi lệnh dừng bơm khẩn cấp"
+                    : isRemoteLocked
+                      ? REMOTE_CONTROL_NOTICE
+                      : "Gửi lệnh dừng bơm khẩn cấp"
                 }
               >
                 Tắt bơm
@@ -774,13 +860,8 @@ export default function App() {
                       </span>
                       <span className="command-time">{formatTime(cmd.created_at)}</span>
                       <span className={`command-status-badge status-${cmd.status}`}>
-                        {cmd.status === "applied"
-                          ? "Thành công"
-                          : cmd.status === "pending"
-                            ? "Đang chờ"
-                            : cmd.status === "rejected"
-                              ? "Từ chối"
-                              : "Hết hạn"}
+                        {commandStatusLabels[cmd.status]}
+                        {cmd.status === "timeout" && cmd.late_ack ? " · ACK đến trễ" : ""}
                       </span>
                     </li>
                   ))}

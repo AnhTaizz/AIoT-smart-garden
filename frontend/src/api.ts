@@ -90,6 +90,11 @@ export interface CommandOut {
   late_ack_at: string | null;
 }
 
+export interface ControlAccess {
+  commands_allowed: boolean;
+  reason: "remote_control_disabled" | null;
+}
+
 export interface CommandListResponse {
   device_id: string;
   count: number;
@@ -445,5 +450,30 @@ export async function fetchRecentCommands(
       return [];
     }
     throw error;
+  }
+}
+
+/** Whether this client may send pump commands; null when it cannot be read. */
+export async function fetchControlAccess(
+  signal?: AbortSignal,
+): Promise<ControlAccess | null> {
+  try {
+    const response = await apiFetch(`${apiBaseUrl}/control-access`, {
+      signal,
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const body: unknown = await response.json();
+    if (isRecord(body) && typeof body.commands_allowed === "boolean") {
+      return {
+        commands_allowed: body.commands_allowed,
+        reason: body.reason === "remote_control_disabled" ? body.reason : null,
+      };
+    }
+    return null;
+  } catch {
+    // Unknown is not "allowed": the backend still enforces the rule on POST.
+    return null;
   }
 }

@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from . import repository
+from .access import REMOTE_CONTROL_DISABLED, ControlAccess, control_access
 from .chat import CHAT_ERRORS, router as chat_router
 from .config import Settings
 from .http_config import configure_cors
@@ -55,6 +56,10 @@ ERROR_MESSAGES = {
     "mqtt_unavailable": "Backend đang mất kết nối tới MQTT broker.",
     "backend_publish_failed": "Backend không publish được lệnh lên MQTT broker.",
     "database_unavailable": "Backend không truy cập được PostgreSQL.",
+    REMOTE_CONTROL_DISABLED: (
+        "Điều khiển bơm qua Internet đang tắt vì API chưa có xác thực; chỉ gửi"
+        " lệnh từ laptop hoặc mạng LAN tin cậy."
+    ),
 }
 
 
@@ -219,6 +224,12 @@ async def ready(request: Request) -> JSONResponse:
     )
 
 
+@app.get("/control-access", response_model=ControlAccess)
+async def get_control_access(request: Request) -> ControlAccess:
+    """Tell the UI whether this client may send pump commands (no auth yet)."""
+    return control_access(request)
+
+
 # --- telemetry -------------------------------------------------------------
 
 
@@ -282,6 +293,9 @@ async def create_command(
     202 only means the backend stored and published the request; the command
     stays `pending` until the device proves what it did or the deadline passes.
     """
+    # Checked first: a remote request must not reach the DB or the broker.
+    if not control_access(request).commands_allowed:
+        raise HTTPException(status_code=403, detail=REMOTE_CONTROL_DISABLED)
     settings: Settings = request.app.state.settings
     bridge: MqttBridge = request.app.state.bridge
     if (

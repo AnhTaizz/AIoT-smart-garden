@@ -1,6 +1,6 @@
 # Trạng thái dự án
 
-Cập nhật: 2026-10-30 trên nhánh `feat/bc-01-mobile-chat-integration` (BC-01, tạo từ `main` `13e1ac0`); chi tiết audit và test trong [BC-01_REPORT](BC-01_REPORT.md). Trạng thái dưới đây chỉ ghi PASS khi đã có bằng chứng; PASS thành phần không đồng nghĩa milestone M1 đã hoàn thành.
+Cập nhật: 2026-10-30 trên nhánh `feat/bc-02-api-authentication` (BC-02, stacked trên nhánh BC-01 vì PR #6 chưa merge); chi tiết trong [BC-01_REPORT](BC-01_REPORT.md) và [BC-02_REPORT](BC-02_REPORT.md). Trạng thái dưới đây chỉ ghi PASS khi đã có bằng chứng; PASS thành phần không đồng nghĩa milestone M1 đã hoàn thành.
 
 ## Hiện trạng đã biết
 
@@ -18,7 +18,8 @@ Cập nhật: 2026-10-30 trên nhánh `feat/bc-01-mobile-chat-integration` (BC-0
 - PostgreSQL host port `5432` bị lỗi port forwarding trên máy kiểm tra; phiên kiểm tra thành công dùng `POSTGRES_PORT=55432`. Đây là cấu hình local, không đổi cổng nội bộ container.
 - Development và LAN Compose đều parse được; trong phiên kiểm tra 2026-09-26, development stack build và bốn container đạt healthy. Đây là trạng thái tại phiên kiểm tra, không phải cam kết stack luôn chạy.
 - Backend và simulator (PR #2, đã merge): có MQTT subscriber → PostgreSQL, latest/history API và vòng đời command `pending/applied/rejected/timeout`; simulator nhận command, gửi ACK/state, chống lệnh trùng/cũ, tự tắt và fail-safe OFF khi mất MQTT. Đã kiểm tra hai chiều với simulator thật. Ngày 2026-10-30 (BC-01) đã chạy thêm một phiên React → API → MQTT → simulator → ACK/state → React bằng Chromium headless; chưa có smartphone thật hoặc ESP32 thật.
-- BC-01 (chưa merge): app Android Capacitor gọi API HTTPS cấu hình được, CORS allow-list, và lệnh bơm qua tunnel/Internet bị chặn `403 remote_control_disabled` cho tới khi có xác thực (BC-02).
+- BC-01 (PR #6, chưa merge): app Android Capacitor gọi API HTTPS cấu hình được, CORS allow-list.
+- BC-02 (chưa merge, stacked trên BC-01): đăng nhập operator (scrypt, phiên Bearer opaque lưu hash trong PostgreSQL, hết hạn/thu hồi), mọi API dữ liệu/lệnh/chat cần đăng nhập, operator được điều khiển bơm qua HTTPS tunnel, rate limit đăng nhập/chat/`pump_on`. MQTT vẫn chưa có xác thực.
 - Bản ghi lệnh, môi trường và kết quả regression: [PR2_TEST_HANDOFF_2026-09-26](PR2_TEST_HANDOFF_2026-09-26.md).
 - Phân công vai trò A/B/C đã gắn tên (Thành, Tài, Toản); tiếp tục chốt GitHub username, lịch và G01–G03.
 
@@ -31,14 +32,15 @@ Cập nhật: 2026-10-30 trên nhánh `feat/bc-01-mobile-chat-integration` (BC-0
 | Build/khởi động Compose | PASS có điều kiện | Build từ root repo; bốn container healthy khi dùng PostgreSQL host port `55432` |
 | `GET /health` | PASS | HTTP 200 khi PostgreSQL chạy và khi PostgreSQL dừng |
 | `GET /ready` | PASS | HTTP 200 khi DB chạy; HTTP 503 khi DB dừng; phục hồi về 200 sau khi DB chạy lại |
-| Frontend | PASS thành phần | 2026-10-30 nhánh BC-01 (sau BC-01.1): Vitest 53/53, TypeScript + Vite build; image Docker frontend build và healthy |
+| Frontend | PASS thành phần | 2026-10-30 nhánh BC-02: Vitest 67/67, TypeScript + Vite build, `build:mobile` + `cap sync android`; image Docker frontend build và healthy |
 | Development bind | PASS runtime | Base `compose.yaml`: bốn container healthy, cả bốn cổng bind `127.0.0.1` |
 | LAN demo override | PASS runtime | `compose.lan.yaml`: bốn container healthy; chỉ dashboard `5173` và MQTT `1883` bind `0.0.0.0`; API/PostgreSQL vẫn ở `127.0.0.1` |
 | Smartphone/ESP32 qua LAN thật | CHƯA KIỂM TRA | Chưa có điện thoại/ESP32 và mạng demo trong phiên kiểm tra này |
 | App Android (Capacitor) | Build CHƯA KIỂM TRA lại | `build:mobile` và `cap sync android` OK; `gradlew assembleDebug` không chạy được vì môi trường kiểm tra bị chặn `dl.google.com`. Chưa cài lên điện thoại trong BC-01 |
-| Chatbot | PASS thành phần | Unit `test_chat.py` và phiên React → Nginx → FastAPI → `ai/kaggle_server.py` với engine STUB; Kaggle Qwen3 thật CHƯA KIỂM TRA (ngrok bị chặn trong môi trường) |
-| Backend unit test | PASS thành phần | 2026-10-30 nhánh BC-01 (sau BC-01.1): 129/129 (validation, chat, CORS, chặn từ xa) trên Python 3.12 trong container |
-| Backend E2E | PASS thành phần | 2026-10-30 nhánh BC-01: 38 pass với PostgreSQL, Mosquitto, backend và Nginx thật; 2 test live Kaggle bị skip (cần `E2E_CHAT_LIVE=1`) |
+| Chatbot | PASS thành phần | Unit `test_chat.py` và phiên React → Nginx → FastAPI → `ai/kaggle_server.py` với engine STUB (BC-01). BC-02: cần đăng nhập, rate limit, `CHAT_API_URL` mặc định trống → `503 not_configured`. Kaggle Qwen3 thật CHƯA KIỂM TRA |
+| Backend unit test | PASS thành phần | 2026-10-30 nhánh BC-02: 156/156 (validation, chat, CORS, auth/rate limit) trên Python 3.12 trong container |
+| Backend E2E | PASS thành phần | 2026-10-30 nhánh BC-02: 47 pass với PostgreSQL, Mosquitto, backend và Nginx thật (có đăng nhập); 2 test live Kaggle bị skip (cần `E2E_CHAT_LIVE=1`) |
+| Xác thực API (BC-02) | PASS thành phần | Anonymous 401 không tạo/publish lệnh; operator 202 → `applied` kể cả qua header tunnel; hết hạn/logout 401; 429 `pump_on` nhưng `pump_off` vẫn 202. Tunnel Cloudflare thật, APK và điện thoại CHƯA KIỂM TRA |
 | Simulator unit test | PASS thành phần | 31/31 test (chạy lại 2026-10-30) cho config, payload, expiry/clock, duplicate, busy, STOP ordering, reboot và disconnect; không skip |
 | Simulator ↔ MQTT ↔ backend | PASS thành phần | Simulator thật nhận ON thành `applied/on`; sau khi broker dừng/khởi động lại báo state mới `off`; phát lại chính ON cũ vẫn `off` |
 | Simulator Ctrl+C | PASS | Tiến trình liên tục ghi nhận Ctrl+C, disconnect và thoát mã 0 |
@@ -101,3 +103,4 @@ Trước khi nghiệm thu M1, cả nhóm hoàn thiện thông tin còn thiếu t
 - 2026-09-26: kiểm tra lại code PR #2 tại `6ba6eb46`: backend unit 51/51, simulator 31/31, E2E thật 33/33, không có test skip. Ba regression về disconnect, bằng chứng sau hạn và ACK accepted đến sau applied đều PASS; phiên broker thật xác nhận reconnect/duplicate ON giữ relay `off`. G02 vẫn DRAFT và M1 vẫn chưa nghiệm thu; bàn giao tiếp cho Toản làm C-W1.
 - 2026-10-30: BC-01 trên `feat/bc-01-mobile-chat-integration`: audit lại repo (PR #2/#3/#5 đã merge, PR #4 còn mở), tích hợp phần code Capacitor Android/CORS/API HTTPS của PR #4 vào `main` mới nhất mà giữ chatbot, chặn lệnh bơm qua tunnel/Internet và sửa UI để phân biệt lỗi API/chưa có dữ liệu/state cũ. Backend unit 125/125, E2E thật 38 pass (2 live Kaggle skip), simulator 31/31, frontend 35/35 + build. APK, smartphone thật và Kaggle thật chưa kiểm tra. G02 vẫn DRAFT trên `main`; M1 vẫn chưa nghiệm thu.
 - 2026-10-30: BC-01.1 trên cùng nhánh: UI khóa điều khiển khi chưa xác minh được quyền (fail closed), polling single-flight + hủy request cũ, giữ số đo cũ khi lỗi API nhưng gắn nhãn chưa cập nhật, rào chắn remote dùng danh sách mạng local tường minh. Backend unit 129/129, E2E thật 38 pass (2 live Kaggle skip), simulator 31/31, frontend 53/53 + build, phiên UI thật cho online/denied/unknown/pending/applied/rejected/timeout/stale/offline. APK, smartphone thật và Kaggle thật vẫn chưa kiểm tra; M1 vẫn chưa nghiệm thu.
+- 2026-10-30: BC-02 trên `feat/bc-02-api-authentication` (stacked trên BC-01 vì PR #6 chưa merge): xác thực operator và phiên Bearer lưu hash trong PostgreSQL, bảo vệ toàn bộ API dữ liệu/lệnh/chat, điều khiển từ xa cho operator đã đăng nhập, rate limit, bỏ URL ngrok mặc định, màn hình đăng nhập Web/Android. Backend unit 156/156, E2E thật 47 pass (2 live Kaggle skip), simulator 31/31, frontend 67/67 + build + mobile bundle + cap sync, phiên trình duyệt thật. APK, điện thoại, tunnel Cloudflare thật và Kaggle thật chưa kiểm tra. G02 vẫn DRAFT; M1 vẫn chưa nghiệm thu.

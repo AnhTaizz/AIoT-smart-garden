@@ -52,6 +52,7 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | [PROJECT_STATE](docs/PROJECT_STATE.md) | Trạng thái thực tế và việc tiếp theo |
 | [PR2_TEST_HANDOFF_2026-09-26](docs/PR2_TEST_HANDOFF_2026-09-26.md) | Bằng chứng regression và bàn giao API cho C-W1 |
 | [BC-01_REPORT](docs/BC-01_REPORT.md) | Audit repo, tích hợp mobile + chatbot, kết quả test và việc cho BC-02 |
+| [BC-02_REPORT](docs/BC-02_REPORT.md) | Xác thực API, điều khiển từ xa, rate limit, threat model và cách demo |
 | [WEEKLY_REVIEW](docs/templates/WEEKLY_REVIEW.md) | Mẫu nghiệm thu tuần và ghi kết quả |
 
 Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_request_template.md`.
@@ -141,11 +142,19 @@ Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/ready
 
 `/health` chỉ xác nhận tiến trình API hoạt động. `/ready` thực hiện `SELECT 1` trên PostgreSQL và trả HTTP 503 khi database không kết nối được.
 
-## App Android và truy cập từ xa (BC-01)
+## Đăng nhập, app Android và truy cập từ xa (BC-01, BC-02)
 
 Cùng một codebase React được đóng gói bằng Capacitor Android (`frontend/android`). Web giữ `/api` cùng origin; app Android gọi **trực tiếp** backend qua URL HTTPS cấu hình lúc build (`VITE_API_URL` trong `frontend/.env.mobile.local`, không commit). Cách build/cài APK xem [frontend/README](frontend/README.md#app-android-capacitor).
 
-**Giới hạn an toàn:** API chưa có xác thực. Request đi qua tunnel/proxy công khai (Cloudflare Quick Tunnel, ngrok, …) chỉ được **đọc** telemetry/state/lịch sử lệnh và dùng chatbot; `POST /devices/{id}/commands` trả `403 remote_control_disabled`, dashboard khóa nút bơm và giải thích lý do. Vì app Android luôn đi qua URL HTTPS công khai, app hiện chỉ giám sát. Điều khiển bơm từ điện thoại dùng LAN demo ở trên. CORS (`CORS_ORIGINS`) chỉ là chính sách trình duyệt, không phải xác thực. Lớp chặn này chỉ nhận diện request qua tunnel/proxy có tự khai báo (header Cloudflare, `X-Forwarded-For`), không chống được mọi đường truy cập Internet; **Endpoint điều khiển chưa an toàn để công khai trực tiếp lên Internet.** Không public cổng API/MQTT/PostgreSQL. Mở lại điều khiển từ xa là việc của BC-02 sau khi có xác thực thật.
+**Đăng nhập bắt buộc (BC-02).** Dữ liệu vườn, lịch sử, lệnh bơm và chatbot chỉ dùng được sau khi đăng nhập tài khoản vận hành. Chỉ `/health`, `/ready` và `/auth/login` là public. Tạo tài khoản trong `.env` (không commit):
+
+```bash
+docker compose run --rm --no-deps backend python -m app.auth hash-password
+```
+
+Lệnh hỏi mật khẩu hai lần (tối thiểu 10 ký tự) và chỉ in ra dòng `scrypt:...`. Đặt `OPERATOR_USERNAME=<tên>` và `OPERATOR_PASSWORD_HASH=<dòng vừa in>` trong `.env`, rồi `docker compose up -d --force-recreate backend`. Thiếu hoặc sai cấu hình thì không ai đăng nhập được (fail closed). `OPERATOR_ROLE=viewer` tạo tài khoản chỉ xem. Phiên hết hạn sau `AUTH_SESSION_TTL_SECONDS` (mặc định 8 giờ); token chỉ nằm trong bộ nhớ app, tải lại trang hoặc mở lại app phải đăng nhập lại.
+
+Người vận hành đã đăng nhập có thể giám sát **và điều khiển bơm từ xa** qua HTTPS tunnel, kể cả app Android qua 4G. Quyền được kiểm tra ở server cho từng request; IP, header Cloudflare và CORS không được dùng làm bằng chứng xác thực. Mức an toàn này là **cho demo**: một tài khoản dùng chung, rate limit trong bộ nhớ một tiến trình, MQTT vẫn anonymous trong LAN. Không public cổng MQTT/PostgreSQL; chi tiết và hạn chế ở [BC-02_REPORT](docs/BC-02_REPORT.md).
 
 Dashboard chỉ mở nút bơm khi backend online **và** `GET /control-access` trả rõ `commands_allowed: true`. Nếu endpoint lỗi, timeout hoặc trả dữ liệu lạ, nút bị khóa với thông báo "Không xác minh được quyền điều khiển"; trạng thái backend không bị đổi sang offline. Đây chỉ là UX, backend vẫn quyết định ở mỗi lệnh.
 

@@ -11,12 +11,15 @@ Giữ phiên Kaggle và đường hầm ngrok hoạt động. Backend gọi dị
 Sao chép `.env.example` thành `.env` nếu chưa có, rồi cấu hình:
 
 ```dotenv
-CHAT_API_URL=https://sly-series-landowner.ngrok-free.dev/v1/chat/completions
+# URL hiện tại của phiên Kaggle/ngrok, ví dụ https://<ten-phien>.ngrok-free.dev/v1/chat/completions
+CHAT_API_URL=
 CHAT_API_KEY=
 CHAT_TEMPERATURE=0.7
 CHAT_MAX_TOKENS=1024
 CHAT_TIMEOUT_SECONDS=120
 ```
+
+Từ BC-02, `CHAT_API_URL` **không còn giá trị mặc định** (trước đây là một URL ngrok cố định). Khi để trống, `POST /chat` trả `503` với `{"code": "chat_unavailable", "reason": "not_configured"}` và thông báo nêu rõ cần cấu hình `CHAT_API_URL`; backend không gọi ra ngoài. `/chat` cần đăng nhập (Bearer token, thiếu → 401) và bị giới hạn `CHAT_RATE_LIMIT` lượt mỗi `CHAT_RATE_WINDOW_SECONDS` giây cho mỗi tài khoản (mặc định 5/60 giây, vượt → `429 chat_request_rate_limited` kèm `Retry-After`).
 
 API hiện tại không yêu cầu key theo mẫu chủ dự án cung cấp. Nếu server hỗ trợ Bearer token, đặt `CHAT_API_KEY` trong `.env`; không thêm vào biến `VITE_*` hay commit key. Tên model là metadata để ghi nhận thực nghiệm, không được gửi thành trường `model` vì contract hiện tại không có trường này.
 
@@ -29,7 +32,7 @@ docker compose up --build -d
 
 Mở `http://127.0.0.1:5173`. Demo điện thoại dùng `docker compose -f compose.yaml -f compose.lan.yaml up --build -d` và IP LAN laptop như README. Chạy development frontend bằng `npm.cmd install` rồi `npm.cmd run dev` trong `frontend/` nếu PowerShell chặn script `npm.ps1`.
 
-Khi URL ngrok đổi: sửa `CHAT_API_URL` trong `.env`, chạy `docker compose up -d --force-recreate backend`; frontend không cần build lại. Địa chỉ health của dịch vụ hiện tại là `https://sly-series-landowner.ngrok-free.dev/health`.
+Khi URL ngrok đổi: sửa `CHAT_API_URL` trong `.env`, chạy `docker compose up -d --force-recreate backend`; frontend không cần build lại. Kiểm tra dịch vụ bằng `<gốc URL ngrok>/health`.
 
 Chat dùng timeout backend 120 giây, Nginx riêng `/api/chat` 135 giây và trình duyệt 145 giây. Backend dành tối đa 4 giây lấy dữ liệu DB trước khi gọi model. Nếu tăng timeout model, cần tăng tương ứng Nginx và trình duyệt, không chỉ sửa `.env`. API giám sát vẫn giữ timeout hiện tại.
 

@@ -41,6 +41,8 @@ class Settings:
     auth_session_ttl_seconds: int = 8 * 3600
     login_max_failures: int = 5
     login_failure_window_seconds: int = 300
+    # Password checks (scrypt, ~128 MiB each) running at once per process.
+    login_max_concurrent: int = 2
     chat_rate_limit: int = 5
     chat_rate_window_seconds: int = 60
     pump_on_rate_limit: int = 6
@@ -85,6 +87,7 @@ class Settings:
             auth_session_ttl_seconds=_int_env("AUTH_SESSION_TTL_SECONDS", 8 * 3600, minimum=60),
             login_max_failures=_int_env("LOGIN_MAX_FAILURES", 5),
             login_failure_window_seconds=_int_env("LOGIN_FAILURE_WINDOW_SECONDS", 300),
+            login_max_concurrent=_int_env("LOGIN_MAX_CONCURRENT", 2),
             chat_rate_limit=_int_env("CHAT_RATE_LIMIT", 5),
             chat_rate_window_seconds=_int_env("CHAT_RATE_WINDOW_SECONDS", 60),
             pump_on_rate_limit=_int_env("PUMP_ON_RATE_LIMIT", 6),

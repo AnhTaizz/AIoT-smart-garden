@@ -362,3 +362,49 @@ def test_pump_on_is_limited_per_device_but_pump_off_never(api, monkeypatch):
         assert off.status_code == 202
     # Another device has its own budget.
     assert api.client.post("/devices/node_02/commands", json=on, headers=headers).status_code == 202
+
+
+# --- command safety (BC-02.1) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize("end", ["expired", "revoked"])
+@pytest.mark.parametrize("body", [{"action": "pump_on", "duration_seconds": 5}, {"action": "pump_off"}])
+def test_expired_or_revoked_token_cannot_send_on_or_off(api, monkeypatch, end, body):
+    _fake_command_path(monkeypatch, api)
+    headers = api.login()
+    if end == "expired":
+        api.sessions.expire_all()
+    else:
+        assert api.client.post("/auth/logout", headers=headers).status_code == 200
+    response = api.client.post("/devices/node_01/commands", json=body, headers=headers)
+    assert response.status_code == 401 and code(response) == "invalid_session"
+    api.bridge.publish.assert_not_called()
+
+
+def test_viewer_never_publishes_on_or_off(api, monkeypatch):
+    _fake_command_path(monkeypatch, api)
+    api.configure(operator_role="viewer")
+    headers = api.login()
+    for body in ({"action": "pump_on", "duration_seconds": 5}, {"action": "pump_off"}):
+        assert api.client.post("/devices/node_01/commands", json=body, headers=headers).status_code == 403
+    api.bridge.publish.assert_not_called()
+
+
+def test_pump_off_is_not_rate_limited_but_can_still_fail(api, monkeypatch):
+    """Exempt from the ON limiter is not the same as "stop always succeeds"."""
+    api.configure(pump_on_rate_limit=1)
+    _fake_command_path(monkeypatch, api)
+    headers = api.login()
+    on = {"action": "pump_on", "duration_seconds": 5}
+    assert api.client.post("/devices/node_01/commands", json=on, headers=headers).status_code == 202
+    assert api.client.post("/devices/node_01/commands", json=on, headers=headers).status_code == 429
+    # Broker down: OFF is not rate limited, yet it fails and the UI must say so.
+    api.bridge.is_connected.return_value = False
+    off = api.client.post("/devices/node_01/commands", json={"action": "pump_off"}, headers=headers)
+    assert off.status_code == 503 and code(off) == "mqtt_unavailable"
+    # Publish failure after the row exists: OFF is reported failed, not pending.
+    api.bridge.is_connected.return_value = True
+    api.bridge.publish.return_value = False
+    monkeypatch.setattr(repository, "mark_publish_failed", AsyncMock())
+    off = api.client.post("/devices/node_01/commands", json={"action": "pump_off"}, headers=headers)
+    assert off.status_code == 503 and code(off) == "backend_publish_failed"

@@ -52,6 +52,7 @@ AUTH_ERRORS = {
     "auth_not_configured": "Backend chưa cấu hình tài khoản vận hành nên không thể đăng nhập.",
     "forbidden": "Tài khoản này không có quyền thực hiện thao tác này.",
     "login_rate_limited": "Đăng nhập sai quá nhiều lần. Vui lòng thử lại sau.",
+    "login_busy": "Máy chủ đang xử lý quá nhiều lượt đăng nhập. Vui lòng thử lại sau vài giây.",
     "chat_request_rate_limited": "Bạn gửi câu hỏi quá nhanh. Vui lòng chờ rồi thử lại.",
     "command_rate_limited": "Lệnh bật bơm được gửi quá dày. Vui lòng chờ rồi thử lại; lệnh tắt bơm không bị giới hạn này.",
 }
@@ -128,11 +129,17 @@ def token_hash(token: str) -> bytes:
 # --- rate limits ------------------------------------------------------------------
 
 
+LOGIN_BUSY_RETRY_SECONDS = 2
+
+
 @dataclass
 class Limiters:
     login_failures: SlidingWindowLimiter
     chat: SlidingWindowLimiter
     pump_on: SlidingWindowLimiter
+    login_max_concurrent: int = 2
+    # Password checks currently running in worker threads (this process only).
+    verifying: int = 0
 
 
 def limiters(request: Request) -> Limiters:
@@ -147,6 +154,7 @@ def limiters(request: Request) -> Limiters:
             pump_on=SlidingWindowLimiter(
                 settings.pump_on_rate_limit, settings.pump_on_rate_window_seconds
             ),
+            login_max_concurrent=settings.login_max_concurrent,
         )
     return state.limiters
 
@@ -240,16 +248,33 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
         raise HTTPException(503, "auth_not_configured")
     known_user = hmac.compare_digest(body.username, settings.operator_username)
     key = settings.operator_username if known_user else UNKNOWN_USER_KEY
-    failures = limiters(request).login_failures
+    gate = limiters(request)
+    failures = gate.login_failures
+    # Everything up to the first await runs without yielding to the event loop,
+    # so the checks and reservations below are atomic for this process.
     wait = failures.retry_after(key)
     if wait is not None:
         raise rate_limited("login_rate_limited", wait)
+    if gate.verifying >= gate.login_max_concurrent:
+        # Reject instead of queueing: a burst cannot pile up pending hashes.
+        raise rate_limited("login_busy", LOGIN_BUSY_RETRY_SECONDS)
+    # Count this attempt as a failure *before* hashing, so parallel requests
+    # cannot all pass the check above; a success removes it again below.
+    failures.record(key)
+    gate.verifying += 1
+
+    def release(_job: asyncio.Future) -> None:
+        gate.verifying -= 1
+
     # Always run the slow hash so an unknown username costs the same time.
-    password_ok = await asyncio.to_thread(
-        verify_password, body.password, settings.operator_password_hash
+    job = asyncio.ensure_future(
+        asyncio.to_thread(verify_password, body.password, settings.operator_password_hash)
     )
+    # The slot is freed when the thread really finishes, even if the client
+    # disconnects and this request is cancelled (shield keeps the job alive).
+    job.add_done_callback(release)
+    password_ok = await asyncio.shield(job)
     if not (known_user and password_ok):
-        failures.record(key)
         logger.info("Login failed")
         raise HTTPException(401, "invalid_credentials")
     failures.reset(key)

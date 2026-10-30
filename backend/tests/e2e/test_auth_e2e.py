@@ -7,6 +7,8 @@ stack must run with CHAT_API_URL unset for the not-configured chat check.
 import hashlib
 import os
 import queue
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -105,17 +107,19 @@ def test_logout_and_expiry_block_new_commands():
                 " WHERE token_hash = %s",
                 (hashlib.sha256(token.encode()).digest(),),
             )
-        status, body = request(
-            "POST", f"/devices/{device.device_id}/commands", ON, headers=headers, auth=False,
-        )
-        assert status == 401 and body["detail"]["code"] == "invalid_session"
+        for body in (ON, {"action": "pump_off"}):
+            status, reply = request(
+                "POST", f"/devices/{device.device_id}/commands", body, headers=headers, auth=False,
+            )
+            assert status == 401 and reply["detail"]["code"] == "invalid_session"
 
         token, headers = new_session()
         assert request("POST", "/auth/logout", headers=headers, auth=False)[0] == 200
-        status, _ = request(
-            "POST", f"/devices/{device.device_id}/commands", ON, headers=headers, auth=False,
-        )
-        assert status == 401
+        for body in (ON, {"action": "pump_off"}):
+            status, _ = request(
+                "POST", f"/devices/{device.device_id}/commands", body, headers=headers, auth=False,
+            )
+            assert status == 401
         assert_nothing_published(device)
 
 
@@ -165,3 +169,30 @@ def test_unconfigured_chat_is_a_clear_503_without_old_ngrok(base):
     detail = body["detail"]
     assert detail["code"] == "chat_unavailable" and detail["reason"] == "not_configured"
     assert "ngrok" not in detail["message"]
+
+
+def test_parallel_login_burst_is_capped_on_the_real_backend():
+    """A small, controlled burst: real scrypt runs at most LOGIN_MAX_CONCURRENT at once.
+
+    Uses an unknown username, whose failure bucket is separate from the
+    operator's, so the shared E2E session and later logins are unaffected.
+    """
+    payload = {"username": "e2e-unknown-user", "password": "wrong-password"}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(
+            lambda _: raw_request("POST", f"{API}/auth/login", payload), range(8),
+        ))
+    statuses = [status for status, _ in results]
+    codes = [body["detail"]["code"] for _, body in results]
+    assert set(statuses) <= {401, 429}
+    # Default LOGIN_MAX_CONCURRENT=2: only a few requests may reach scrypt.
+    assert codes.count("invalid_credentials") <= 2
+    assert codes.count("login_busy") + codes.count("login_rate_limited") >= 6
+    # Once the hashes finish, the operator can still log in.
+    for _ in range(10):
+        status, body = login()
+        if status == 200:
+            break
+        assert body["detail"]["code"] == "login_busy"
+        time.sleep(1)
+    assert status == 200

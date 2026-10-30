@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import ChatAssistant from "./ChatAssistant";
+import LoginScreen from "./LoginScreen";
+import {
+  clearSession,
+  getSession,
+  subscribe,
+  type AuthSession,
+  type EndReason,
+} from "./auth";
 import {
   fetchCommand,
   fetchControlAccess,
@@ -8,6 +16,7 @@ import {
   fetchRecentCommands,
   fetchSystemStatus,
   fetchTelemetryHistory,
+  logout,
   sendCommand,
   type BackendStatus,
   type CommandAction,
@@ -93,8 +102,8 @@ export function mergeCommands(fetched: CommandOut[], current: CommandOut[]): Com
   });
 }
 
-const REMOTE_CONTROL_NOTICE =
-  "Điều khiển bơm từ xa đang tắt: API chưa có xác thực nên chỉ nhận lệnh từ laptop hoặc mạng LAN tin cậy. Bạn vẫn xem được số đo và trạng thái.";
+const VIEWER_NOTICE =
+  "Tài khoản này chỉ có quyền xem; backend từ chối lệnh bơm (403). Đăng nhập bằng tài khoản vận hành để điều khiển.";
 
 function StatusDot({ state }: { state: BackendStatus | DatabaseStatus }) {
   return <span aria-hidden="true" className={`status-dot status-${state}`} />;
@@ -218,7 +227,51 @@ function SparklineChart({
   );
 }
 
+const roleLabels: Record<AuthSession["role"], string> = {
+  operator: "Vận hành",
+  viewer: "Chỉ xem",
+};
+
+/**
+ * Shows the login screen until there is a session, then the dashboard.
+ * The dashboard is keyed by token, so a new login starts from a clean state
+ * and ending a session unmounts it, which aborts all polling.
+ */
 export default function App() {
+  const [session, setCurrent] = useState<AuthSession | null>(getSession);
+  const [endReason, setEndReason] = useState<EndReason | null>(null);
+
+  useEffect(() => {
+    setCurrent(getSession());
+    const unsubscribe = subscribe((next, reason) => {
+      setCurrent(next);
+      setEndReason(reason);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Lock as soon as the server-given expiry passes; the server enforces it too.
+  useEffect(() => {
+    if (!session) return;
+    const remaining = session.expiresAt - Date.now();
+    if (remaining <= 0) {
+      clearSession("expired");
+      return;
+    }
+    const timer = window.setTimeout(
+      () => clearSession("expired"),
+      Math.min(remaining, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timer);
+  }, [session]);
+
+  if (!session) return <LoginScreen endReason={endReason} />;
+  return <Dashboard key={session.token} session={session} />;
+}
+
+function Dashboard({ session }: { session: AuthSession }) {
   const durationInputId = useId();
   const [deviceId] = useState<string>(DEFAULT_DEVICE_ID);
   const [status, setStatus] = useState<SystemStatus>(emptyStatus);
@@ -428,6 +481,16 @@ export default function App() {
   const isBackendOnline = status.backend === "online";
   const canControl = isBackendOnline && controlAccess === "allowed";
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // The local session ends anyway; the server copy expires on its own.
+    } finally {
+      clearSession("logout");
+    }
+  };
+
   // Handle send command
   const handleSendCommand = async (action: CommandAction) => {
     // The buttons are disabled too; this guards stale handlers. Not security:
@@ -464,7 +527,7 @@ export default function App() {
     !isBackendOnline
       ? null
       : controlAccess === "denied"
-        ? REMOTE_CONTROL_NOTICE
+        ? VIEWER_NOTICE
         : controlAccess === "unknown"
           ? CONTROL_UNKNOWN_NOTICE
           : controlAccess === "checking"
@@ -498,7 +561,12 @@ export default function App() {
           <span className="node-badge" title="Mã trạm đang kết nối">
             Trạm: <strong>{deviceId}</strong>
           </span>
-          <span className="environment-badge">Môi trường phát triển</span>
+          <span className="session-badge" data-testid="session-user">
+            {session.username} · {roleLabels[session.role]}
+          </span>
+          <button type="button" className="refresh-button logout-button" onClick={handleLogout}>
+            Đăng xuất
+          </button>
         </div>
       </header>
 

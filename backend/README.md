@@ -50,7 +50,8 @@ Ngoài `GET /health`, `GET /ready` và `POST /auth/login`, mọi endpoint ở b�
 
 - **Tài khoản:** `OPERATOR_USERNAME`, `OPERATOR_PASSWORD_HASH` (scrypt N=2^17, r=8, p=1 từ thư viện chuẩn Python; tạo bằng `python -m app.auth hash-password`), `OPERATOR_ROLE` (`operator` | `viewer`). Không có giá trị mặc định; thiếu/sai → login `503 auth_not_configured`, mọi API bảo vệ `401` (fail closed).
 - **Phiên:** token opaque ngẫu nhiên 256 bit. Bảng `auth_session` (migration `004`) chỉ lưu SHA-256 của token, `expires_at`, `revoked_at` và dấu vân tay tài khoản. Đổi username/mật khẩu/role làm mọi phiên cũ hết hiệu lực. `POST /auth/logout` thu hồi ngay.
-- **Rate limit** (bộ đếm trong bộ nhớ **một tiến trình Uvicorn**; reset khi restart, không chia sẻ giữa nhiều worker): đăng nhập sai theo username (tên lạ gộp chung một bucket), `/chat` theo tài khoản, `pump_on` theo thiết bị. Vượt → `429` + `Retry-After`. `pump_off` không bao giờ bị giới hạn này.
+- **Rate limit** (bộ đếm trong bộ nhớ **một tiến trình Uvicorn**; reset khi restart, không chia sẻ giữa nhiều worker): đăng nhập sai theo username (tên lạ gộp chung một bucket), `/chat` theo tài khoản, `pump_on` theo thiết bị. Vượt → `429` + `Retry-After`. `pump_off` không bị giới hạn của `pump_on`, nhưng vẫn có thể thất bại nếu broker/mạng/DB lỗi.
+- **Đăng nhập đồng thời (BC-02.1):** mỗi lượt thử được ghi vào bộ đếm sai *trước* khi chạy scrypt (thành công thì xóa lại), nên burst song song không vượt `LOGIN_MAX_FAILURES`. Tối đa `LOGIN_MAX_CONCURRENT` (mặc định 2) phép kiểm tra mật khẩu chạy cùng lúc mỗi tiến trình; lượt vượt nhận ngay `429 login_busy` + `Retry-After: 2`, không xếp hàng. Slot chỉ được trả khi thread hash kết thúc, kể cả khi client ngắt kết nối.
 - **Log:** không ghi mật khẩu, token hay hash; chỉ ghi "Login failed/succeeded".
 
 | Endpoint | Ý nghĩa |
@@ -104,6 +105,7 @@ Telemetry trùng `device_id` + `boot_id` + `sequence` bị **bỏ qua im lặng*
 | `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng; giá trị nháp chờ G02 |
 | `COMMAND_MAX_DURATION_SECONDS` | 120 | Chỉ kiểm tra input; thiết bị vẫn giữ giới hạn bơm riêng |
 | `TELEMETRY_STALE_SECONDS` | 30 | Ngưỡng `stale` cho `/latest` và `/state` |
+| `LOGIN_MAX_CONCURRENT` | 2 | Số phép kiểm tra mật khẩu scrypt (~128 MiB mỗi phép) chạy cùng lúc; vượt → `429 login_busy` |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost` | Danh sách origin cách nhau bằng dấu phẩy; `*` bị từ chối khi khởi động; rỗng = tắt CORS. Web cùng origin qua `/api` không cần thêm. CORS không phải xác thực |
 | `CHAT_API_URL`, `CHAT_API_KEY`, `CHAT_TEMPERATURE`, `CHAT_MAX_TOKENS`, `CHAT_TIMEOUT_SECONDS` | Xem `.env.example` | Chỉ ở backend; xem [CHATBOT](../docs/CHATBOT.md) |
 

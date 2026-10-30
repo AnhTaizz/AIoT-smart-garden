@@ -548,7 +548,7 @@ Mọi endpoint dữ liệu, lịch sử, lệnh, `/control-access`, `/auth/me`, 
 }
 ```
 
-`GET /auth/me` → `200 {"user": {"username", "role"}, "expires_at"}`. `POST /auth/logout` → `200 {"status": "logged_out"}`; token bị thu hồi ngay ở server. `GET /control-access` → `200 {"commands_allowed": true, "reason": null, "role": "operator"}` hoặc `{"commands_allowed": false, "reason": "forbidden", "role": "viewer"}`. UI chỉ mở nút khi nhận đúng `commands_allowed: true`; backend vẫn tự kiểm tra ở mọi `POST /devices/{id}/commands`.
+`GET /auth/me` → `200 {"user": {"username", "role"}, "expires_at"}`. `POST /auth/logout` → `200 {"status": "logged_out"}`; token bị thu hồi ngay ở server. Client chỉ được báo "đã thu hồi ở máy chủ" khi nhận 200 (hoặc 401: token đã không còn hiệu lực); lỗi mạng/timeout/5xx nghĩa là chưa xác nhận thu hồi. `GET /control-access` → `200 {"commands_allowed": true, "reason": null, "role": "operator"}` hoặc `{"commands_allowed": false, "reason": "forbidden", "role": "viewer"}`. UI chỉ mở nút khi nhận đúng `commands_allowed: true`; backend vẫn tự kiểm tra ở mọi `POST /devices/{id}/commands`.
 
 | Tình huống | Mã HTTP | `code` |
 | --- | --- | --- |
@@ -559,7 +559,8 @@ Mọi endpoint dữ liệu, lịch sử, lệnh, `/control-access`, `/auth/me`, 
 | Tài khoản `viewer` gửi lệnh | 403 | `forbidden` |
 | Đăng nhập sai quá `LOGIN_MAX_FAILURES` lần trong `LOGIN_FAILURE_WINDOW_SECONDS` | 429 + `Retry-After` | `login_rate_limited` |
 | `/chat` quá `CHAT_RATE_LIMIT` lượt/cửa sổ cho mỗi tài khoản | 429 + `Retry-After` | `chat_request_rate_limited` |
-| `pump_on` quá `PUMP_ON_RATE_LIMIT` lượt/cửa sổ cho mỗi thiết bị (**`pump_off` không bao giờ bị giới hạn này**) | 429 + `Retry-After` | `command_rate_limited` |
+| Quá `LOGIN_MAX_CONCURRENT` phép kiểm tra mật khẩu đang chạy (BC-02.1) | 429 + `Retry-After: 2` | `login_busy` |
+| `pump_on` quá `PUMP_ON_RATE_LIMIT` lượt/cửa sổ cho mỗi thiết bị (`pump_off` không bị giới hạn này nhưng vẫn có thể lỗi 503 khi broker/DB lỗi) | 429 + `Retry-After` | `command_rate_limited` |
 | `CHAT_API_URL` chưa cấu hình | 503 | `chat_unavailable`, `reason: "not_configured"` |
 
 Thứ tự kiểm tra ở `POST /devices/{id}/commands`: xác thực (401) → quyền (403) → kiểm tra thời lượng (422) → broker (503) → giới hạn `pump_on` (429) → tạo command và publish. Request bị chặn ở các bước trước không tạo bản ghi command và không publish MQTT. Thân 429 có thêm `retry_after_seconds`. Mục `remote_control_disabled` của BC-01 đã bị thay bằng kiểm tra phiên/role.

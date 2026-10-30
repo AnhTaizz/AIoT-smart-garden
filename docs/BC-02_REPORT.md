@@ -41,7 +41,7 @@ Thứ tự kiểm tra lệnh: 401 → 403 → 422 thời lượng → 503 broker
 | Đăng nhập sai: 5 lần / 300 giây | Username đúng; mọi username lạ gộp một bucket | `429 login_rate_limited` + `Retry-After` (kể cả khi lần sau nhập đúng) |
 | `/chat`: 5 lượt / 60 giây | Tài khoản | `429 chat_request_rate_limited` + `Retry-After` |
 | `pump_on`: 6 lượt / 60 giây | `device_id` | `429 command_rate_limited` + `Retry-After` |
-| `pump_off` | — | **Không bao giờ bị giới hạn** để luôn dừng được bơm |
+| `pump_off` | — | Không bị giới hạn của `pump_on`. **Không** có nghĩa lệnh dừng luôn thành công: broker/mạng/DB lỗi vẫn làm OFF thất bại (503) và UI phải báo lỗi; an toàn cuối cùng là giới hạn chạy bơm cục bộ trên firmware |
 
 ### Frontend (Web + Capacitor Android, cùng code)
 
@@ -112,3 +112,50 @@ Thứ tự kiểm tra lệnh: 401 → 403 → 422 thời lượng → 503 broker
 3. Lockout theo IP tin cậy (Cloudflare Access/WAF) hoặc tăng dần thời gian khóa; lưu bộ đếm vào PostgreSQL nếu chạy nhiều tiến trình.
 4. Lưu phiên bền trên Android bằng kho bảo mật (Android Keystore) nếu cần, thay vì đăng nhập lại mỗi lần mở app.
 5. HTTPS cho LAN demo hoặc chỉ cho phép đăng nhập qua tunnel HTTPS.
+
+## 9. BC-02.1 — Sửa sau review (2026-10-30)
+
+Làm tiếp trên nhánh `feat/bc-02-api-authentication` (PR #7, base vẫn là nhánh BC-01, vẫn Draft). Không đổi authentication, firmware, MQTT G02 hay trạng thái G02/M1.
+
+### P0 — Đăng nhập song song vượt giới hạn và làm quá tải scrypt
+
+- **Lỗi:** login kiểm tra giới hạn trước `await asyncio.to_thread(verify_password)` nhưng chỉ ghi nhận thất bại *sau* khi scrypt chạy xong. Request song song cùng qua kiểm tra và mỗi request chạy một scrypt N=2^17 (~128 MiB, ~1,5 giây).
+- **Tái hiện trước khi sửa** (test có kiểm soát, verifier giả có độ trễ thay cho scrypt thật): 30 lần đăng nhập sai song song với giới hạn 5 → verifier bị gọi **30 lần**.
+- **Sửa** (`app/auth.py`, không thêm dependency, không giảm cost scrypt):
+  - Kiểm tra giới hạn, kiểm tra số phép hash đang chạy và ghi nhận lượt thử đều nằm trong cùng một đoạn đồng bộ trước `await` đầu tiên, nên nguyên tử trong một tiến trình asyncio. Lượt thử được tính là thất bại *trước* khi hash; thành công thì xóa.
+  - Tối đa `LOGIN_MAX_CONCURRENT` (mặc định 2) phép kiểm tra mật khẩu chạy cùng lúc mỗi tiến trình, tức tối đa ~256 MiB cho scrypt. Lượt vượt nhận ngay `429 login_busy` + `Retry-After: 2`, không xếp hàng chờ.
+  - Slot được trả khi thread hash thật sự kết thúc (`asyncio.shield` + done-callback), kể cả khi client ngắt kết nối giữa chừng.
+- **Bằng chứng:** `tests/test_auth_concurrency.py` (5 test) chứng minh: 30 request song song → verifier ≤ 5 lần, ≥ 25 request nhận 429 kèm `Retry-After`, tài khoản vẫn bị khóa sau đó; 12 request với cap 2 → tối đa 2 chạy cùng lúc, ≥ 10 nhận `login_busy` ngay, không chờ; đăng nhập đúng sau burst vẫn thành công; client ngắt kết nối không trả slot sớm; cost production vẫn 2^17. E2E trên stack thật gửi burst nhỏ 8 request (scrypt thật): ≤ 2 tới bước kiểm tra mật khẩu, phần còn lại 429, operator đăng nhập lại được. Kiểm tra đột biến: ghi nhận sau khi hash, bỏ cap, trả slot khi request bị hủy → lần lượt 3, 2 và 1 test fail.
+
+### P1 — Đăng xuất khi mất mạng
+
+- **Lỗi:** frontend xóa phiên và báo "Bạn đã đăng xuất" kể cả khi `POST /auth/logout` thất bại, ngầm nói token đã bị thu hồi.
+- **Sửa** (`App.tsx`, `api.ts`, `auth.ts`, `LoginScreen.tsx`):
+  - Nút bơm khóa ngay khi bấm Đăng xuất, kèm thông báo "Đang đăng xuất; điều khiển bơm đã khóa".
+  - `logout()` gửi một lần, không retry.
+  - Server trả 200 (hoặc 401: token đã hết hiệu lực) → "Máy chủ đã xác nhận phiên không còn hiệu lực".
+  - Mất mạng, timeout 10 giây hoặc 5xx → vẫn xóa token khỏi bộ nhớ thiết bị nhưng báo "CHƯA xác nhận được việc thu hồi phiên ở máy chủ… có thể vẫn dùng được tới khi hết hạn lúc HH:MM", kèm cách xử lý.
+  - 401 của logout không đi đường "phiên hết hạn" chung. 401 đến muộn của phiên cũ không kết thúc phiên mới.
+- **Bằng chứng:** 6 test mới trong `auth.test.tsx` (xác nhận, 401, mất mạng/500/timeout, khóa nút khi đang logout, 401 muộn sau khi đăng nhập lại). Kiểm tra đột biến 4 trường hợp đều bị bắt. Trên trình duyệt thật với stack thật: logout có mạng → thông báo xác nhận, token cũ bị 401. Logout bị cắt mạng (chặn `/api/auth/logout` ở trình duyệt) → thông báo "CHƯA xác nhận", và token **thật sự vẫn hợp lệ** ở server (`/auth/me` 200), đúng với lời cảnh báo; sau đó đã thu hồi thủ công.
+
+### Kiểm tra an toàn lệnh
+
+Unit test mới: token hết hạn hoặc đã logout không gửi được cả ON lẫn OFF (401, không publish); viewer không publish ON/OFF; `pump_on` bị 429 trong khi `pump_off` không bị giới hạn nhưng **vẫn thất bại** (503 `mqtt_unavailable`, 503 `backend_publish_failed`) khi broker lỗi. E2E: token hết hạn/đã logout bị 401 cho cả ON và OFF. Frontend: POST bật bơm lỗi mạng không bao giờ được gửi lại. Quy tắc G02 giữ nguyên (`schemas.py`, `mqtt_bridge.py`, `ingest.py`, `repository.py` phần command, simulator không đổi).
+
+### Giới hạn còn lại (ghi chính xác)
+
+- **HTTP trong LAN:** `compose.lan.yaml` phục vụ dashboard qua HTTP. Trên Wi-Fi/hotspot, mật khẩu (khi đăng nhập) và token Bearer (mọi request) đi dạng rõ; ai bắt được gói tin trong cùng mạng có thể dùng lại token tới khi hết hạn/logout. Chỉ dùng hotspot tin cậy; từ xa dùng HTTPS tunnel.
+- **MQTT anonymous:** Mosquitto không có username/password/ACL. Ai vào được LAN/hotspot (hoặc cổng 1883 nếu bị mở) có thể publish thẳng `garden/<id>/control`, bỏ qua toàn bộ xác thực API. Lớp an toàn còn lại là quy tắc G02 trên thiết bị (`target_boot_id`, `expires_at`, giới hạn bơm cục bộ). Cần task MQTT auth/ACL với Thành (A).
+- **Rate limit một tiến trình:** mọi bộ đếm (đăng nhập sai, `login_busy`, chat, `pump_on`) nằm trong bộ nhớ một tiến trình Uvicorn: mất khi restart, không chia sẻ giữa nhiều worker/replica. Chạy N worker thì giới hạn thực tế nhân N. Kẻ biết username có thể khóa đăng nhập operator 5 phút; một burst sai cũng có thể chiếm 2 slot hash khiến người dùng thật tạm nhận `login_busy`.
+- **Logout không xác nhận:** nếu logout thất bại, token còn hiệu lực tới `expires_at` (mặc định 8 giờ). Cách thu hồi ngay: đăng nhập lại rồi đăng xuất khi có mạng, hoặc đổi mật khẩu operator (thu hồi mọi phiên).
+
+### Regression BC-02.1
+
+| Kiểm thử | Kết quả |
+| --- | --- |
+| Compose config base/`+lan`/`+device`/`+test` | OK |
+| Backend unit + E2E (PostgreSQL/Mosquitto/FastAPI/Nginx thật) | **215 pass** (167 unit + 48 E2E), 2 skip (live Kaggle) |
+| Simulator | 31/31 |
+| Frontend Vitest | **73/73** |
+| TypeScript + Vite build, `build:mobile` (HTTPS forwarder cục bộ), `cap sync android` | OK; bundle không tham chiếu storage |
+| APK/Gradle, điện thoại 4G, Cloudflare tunnel thật, Kaggle thật | **CHƯA CHẠY** (như mục 5) |

@@ -31,6 +31,8 @@ def main() -> int:
         "E2E_CHAT_PROXY_URL": "http://127.0.0.1:" + values.get("FRONTEND_PORT", "5173") + "/api",
         "E2E_PROXY_URL": "http://127.0.0.1:" + values.get("FRONTEND_PORT", "5173") + "/api",
         "DB_HOST": "127.0.0.1", "DB_PORT": values.get("POSTGRES_PORT", "5432"),
+        "E2E_OPERATOR_USERNAME": values.get("OPERATOR_USERNAME", ""),
+        "E2E_OPERATOR_PASSWORD": values.get("E2E_OPERATOR_PASSWORD", ""),
         "DB_NAME": values["POSTGRES_DB"], "DB_USER": values["POSTGRES_USER"], "DB_PASSWORD": values["POSTGRES_PASSWORD"],
     }
     for key, value in defaults.items():

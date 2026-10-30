@@ -5,7 +5,7 @@ import os
 import httpx
 import pytest
 
-from helpers import API, FakeDevice, request
+from helpers import API, FakeDevice, auth_headers, request
 
 pytestmark = pytest.mark.skipif(
     not API or os.getenv("E2E_CHAT_LIVE") != "1",
@@ -19,7 +19,7 @@ def test_chat_reads_mqtt_data_from_postgres_through_nginx_without_publishing_com
         device.announce()
         sent = device.publish_telemetry(temperature_c=27.3, soil_moisture_pct=38.5)
         device.wait_for_count(1)
-        response = httpx.post(PROXY + "/chat", json={
+        response = httpx.post(PROXY + "/chat", headers=auth_headers(), json={
             "message": "Đọc giúp tôi số đo vườn hiện tại. Nếu là mô phỏng, hãy nói rõ.",
             "device_id": device.device_id,
             "include_garden_context": True,
@@ -41,10 +41,10 @@ def test_chat_reads_mqtt_data_from_postgres_through_nginx_without_publishing_com
 
 
 def test_chat_can_disable_context_and_validate_payload_through_nginx():
-    invalid = httpx.post(PROXY + "/chat", json={"message": " "}, timeout=10)
+    invalid = httpx.post(PROXY + "/chat", headers=auth_headers(), json={"message": " "}, timeout=10)
     assert invalid.status_code == 422
     assert invalid.json()["detail"]["code"] == "invalid_payload"
-    response = httpx.post(PROXY + "/chat", json={
+    response = httpx.post(PROXY + "/chat", headers=auth_headers(), json={
         "message": "Tôi trồng rau trong chậu. Trước khi tưới nên kiểm tra điều gì?",
         "include_garden_context": False,
     }, timeout=145)

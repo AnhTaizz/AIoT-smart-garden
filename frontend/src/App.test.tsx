@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { mergeCommands } from "./App";
 import type { CommandOut } from "./api";
+import { clearSession, setSession } from "./auth";
+
+// Dashboard tests run as a logged-in operator; login flows are in auth.test.tsx.
+beforeEach(() => {
+  setSession({ token: "test-token-0123456789abcdef", username: "operator", role: "operator", expiresAt: Date.now() + 3_600_000 });
+});
+afterEach(() => clearSession("logout"));
 
 const mockTelemetry = {
   id: 1,
@@ -401,6 +408,20 @@ describe("Remote command lifecycle", () => {
     expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
   });
 
+  it("never re-sends pump_on when the POST itself fails on the network", async () => {
+    const base = setupMockFetch();
+    const mock = vi.fn((url: string, init?: RequestInit) =>
+      init?.method === "POST" ? Promise.reject(new TypeError("Failed to fetch")) : base(url, init));
+    vi.stubGlobal("fetch", mock);
+    render(<App />);
+    await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Failed to fetch/));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(screen.queryByText(/Đang đợi ACK/)).not.toBeInTheDocument();
+  });
+
   it("recovers command status after network loss without sending ON twice", async () => {
     let reads = 0;
     const base = setupMockFetch();
@@ -424,11 +445,11 @@ describe("Remote command lifecycle", () => {
 describe("B/C state distinctions", () => {
   afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-  it("locks pump buttons when the backend reports remote control disabled", async () => {
-    const mock = setupMockFetch({"/control-access": {commands_allowed: false, reason: "remote_control_disabled"}});
+  it("locks pump buttons when the backend denies control (viewer)", async () => {
+    const mock = setupMockFetch({"/control-access": {commands_allowed: false, reason: "forbidden", role: "viewer"}});
     vi.stubGlobal("fetch", mock);
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Điều khiển bơm từ xa đang tắt/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/chỉ có quyền xem/)).toBeInTheDocument());
     // Read-only data stays visible.
     expect(screen.getByText("28.4")).toBeInTheDocument();
     expect(screen.getByRole("button", {name: "Bật bơm"})).toBeDisabled();
@@ -436,13 +457,13 @@ describe("B/C state distinctions", () => {
     expect(mock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
   });
 
-  it("shows the backend 403 message if a remote command is still refused", async () => {
+  it("shows the backend 403 message if the server refuses a command", async () => {
     const base = setupMockFetch();
     vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
       if (init?.method === "POST") {
         return Promise.resolve({ok: false, status: 403, json: async () => ({detail: {
-          code: "remote_control_disabled",
-          message: "Điều khiển bơm qua Internet đang tắt vì API chưa có xác thực.",
+          code: "forbidden",
+          message: "Tài khoản này không có quyền thực hiện thao tác này.",
         }})});
       }
       return base(url, init);
@@ -450,7 +471,7 @@ describe("B/C state distinctions", () => {
     render(<App />);
     await waitFor(() => expect(screen.getByRole("button", {name: "Bật bơm"})).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", {name: "Bật bơm"}));
-    await waitFor(() => expect(screen.getByText(/qua Internet đang tắt/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/không có quyền thực hiện/)).toBeInTheDocument());
     expect(screen.queryByText(/Đang đợi ACK/)).not.toBeInTheDocument();
   });
 
@@ -576,9 +597,9 @@ describe("Control access fails closed", () => {
   });
 
   it("treats a refusal with an unknown reason as denied", async () => {
-    withAccess(() => Promise.resolve(okJson({commands_allowed: false, reason: "auth_required"})));
+    withAccess(() => Promise.resolve(okJson({commands_allowed: false, reason: "something_new"})));
     render(<App />);
-    await waitFor(() => expect(screen.getByText(/Điều khiển bơm từ xa đang tắt/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/chỉ có quyền xem/)).toBeInTheDocument());
     expect(screen.getByRole("button", {name: "Bật bơm"})).toBeDisabled();
   });
 

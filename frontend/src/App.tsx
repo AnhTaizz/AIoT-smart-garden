@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import ChatAssistant from "./ChatAssistant";
+import LoginScreen from "./LoginScreen";
+import {
+  clearSession,
+  getSession,
+  subscribe,
+  type AuthSession,
+  type SessionEnd,
+} from "./auth";
 import {
   fetchCommand,
   fetchControlAccess,
@@ -8,6 +16,7 @@ import {
   fetchRecentCommands,
   fetchSystemStatus,
   fetchTelemetryHistory,
+  logout,
   sendCommand,
   type BackendStatus,
   type CommandAction,
@@ -93,8 +102,8 @@ export function mergeCommands(fetched: CommandOut[], current: CommandOut[]): Com
   });
 }
 
-const REMOTE_CONTROL_NOTICE =
-  "Điều khiển bơm từ xa đang tắt: API chưa có xác thực nên chỉ nhận lệnh từ laptop hoặc mạng LAN tin cậy. Bạn vẫn xem được số đo và trạng thái.";
+const VIEWER_NOTICE =
+  "Tài khoản này chỉ có quyền xem; backend từ chối lệnh bơm (403). Đăng nhập bằng tài khoản vận hành để điều khiển.";
 
 function StatusDot({ state }: { state: BackendStatus | DatabaseStatus }) {
   return <span aria-hidden="true" className={`status-dot status-${state}`} />;
@@ -218,7 +227,51 @@ function SparklineChart({
   );
 }
 
+const roleLabels: Record<AuthSession["role"], string> = {
+  operator: "Vận hành",
+  viewer: "Chỉ xem",
+};
+
+/**
+ * Shows the login screen until there is a session, then the dashboard.
+ * The dashboard is keyed by token, so a new login starts from a clean state
+ * and ending a session unmounts it, which aborts all polling.
+ */
 export default function App() {
+  const [session, setCurrent] = useState<AuthSession | null>(getSession);
+  const [sessionEnd, setSessionEnd] = useState<SessionEnd | null>(null);
+
+  useEffect(() => {
+    setCurrent(getSession());
+    const unsubscribe = subscribe((next, end) => {
+      setCurrent(next);
+      setSessionEnd(end);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Lock as soon as the server-given expiry passes; the server enforces it too.
+  useEffect(() => {
+    if (!session) return;
+    const remaining = session.expiresAt - Date.now();
+    if (remaining <= 0) {
+      clearSession("expired");
+      return;
+    }
+    const timer = window.setTimeout(
+      () => clearSession("expired"),
+      Math.min(remaining, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timer);
+  }, [session]);
+
+  if (!session) return <LoginScreen end={sessionEnd} />;
+  return <Dashboard key={session.token} session={session} />;
+}
+
+function Dashboard({ session }: { session: AuthSession }) {
   const durationInputId = useId();
   const [deviceId] = useState<string>(DEFAULT_DEVICE_ID);
   const [status, setStatus] = useState<SystemStatus>(emptyStatus);
@@ -237,6 +290,7 @@ export default function App() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const commandPollRef = useRef<number | null>(null);
   // Lets the command poll ask for a fresh load through the single-flight loop.
@@ -426,7 +480,26 @@ export default function App() {
   }, [activeCommand, deviceId, refreshKey]);
 
   const isBackendOnline = status.backend === "online";
-  const canControl = isBackendOnline && controlAccess === "allowed";
+  const canControl = isBackendOnline && controlAccess === "allowed" && !loggingOut;
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    // Lock pump controls at once; nothing is sent while the revoke runs.
+    setLoggingOut(true);
+    const token = session.token;
+    let confirmed = false;
+    try {
+      await logout();
+      confirmed = true;
+    } catch {
+      // Not confirmed: the token may still be valid on the server until it
+      // expires. The device forgets it anyway and says so honestly.
+    }
+    // A newer login (another tab of this app instance) must not be ended.
+    if (getSession()?.token !== token) return;
+    if (confirmed) clearSession("logout");
+    else clearSession("logout_unconfirmed", session.expiresAt);
+  };
 
   // Handle send command
   const handleSendCommand = async (action: CommandAction) => {
@@ -460,11 +533,12 @@ export default function App() {
   // Values kept from an earlier poll after an API error are not live.
   const telemetryOutdated = telemetry !== null && (telemetry.stale || telemetryError);
   const stateOutdated = deviceState !== null && (deviceState.stale || stateError);
-  const controlNotice =
-    !isBackendOnline
+  const controlNotice = loggingOut
+    ? "Đang đăng xuất; điều khiển bơm đã khóa."
+    : !isBackendOnline
       ? null
       : controlAccess === "denied"
-        ? REMOTE_CONTROL_NOTICE
+        ? VIEWER_NOTICE
         : controlAccess === "unknown"
           ? CONTROL_UNKNOWN_NOTICE
           : controlAccess === "checking"
@@ -498,7 +572,18 @@ export default function App() {
           <span className="node-badge" title="Mã trạm đang kết nối">
             Trạm: <strong>{deviceId}</strong>
           </span>
-          <span className="environment-badge">Môi trường phát triển</span>
+          <span className="session-badge" data-testid="session-user">
+            {session.username} · {roleLabels[session.role]}
+          </span>
+          <button
+            type="button"
+            className="refresh-button logout-button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            aria-busy={loggingOut}
+          >
+            {loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
+          </button>
         </div>
       </header>
 

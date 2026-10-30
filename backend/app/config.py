@@ -27,21 +27,38 @@ class Settings:
     command_timeout_seconds: int
     command_max_duration_seconds: int
     telemetry_stale_seconds: int
-    chat_api_url: str = "https://sly-series-landowner.ngrok-free.dev/v1/chat/completions"
+    # Empty means "not configured": /chat answers chat_unavailable.
+    chat_api_url: str = ""
     chat_api_key: str | None = None
     chat_temperature: float = 0.7
     chat_max_tokens: int = 1024
     chat_timeout_seconds: int = 120
     cors_origins: tuple[str, ...] = ()
+    # One operator account; no credentials means authentication fails closed.
+    operator_username: str = ""
+    operator_password_hash: str = ""
+    operator_role: str = "operator"
+    auth_session_ttl_seconds: int = 8 * 3600
+    login_max_failures: int = 5
+    login_failure_window_seconds: int = 300
+    # Password checks (scrypt, ~128 MiB each) running at once per process.
+    login_max_concurrent: int = 2
+    chat_rate_limit: int = 5
+    chat_rate_window_seconds: int = 60
+    pump_on_rate_limit: int = 6
+    pump_on_rate_window_seconds: int = 60
 
     @classmethod
     def from_env(cls) -> "Settings":
         temperature = float(os.getenv("CHAT_TEMPERATURE", "0.7"))
         if not math.isfinite(temperature) or not 0 <= temperature <= 2:
             raise ValueError("CHAT_TEMPERATURE must be between 0 and 2")
-        chat_api_url = os.getenv("CHAT_API_URL", cls.chat_api_url).strip()
-        if not chat_api_url.startswith(("https://", "http://")):
+        chat_api_url = os.getenv("CHAT_API_URL", "").strip()
+        if chat_api_url and not chat_api_url.startswith(("https://", "http://")):
             raise ValueError("CHAT_API_URL must be an HTTP(S) endpoint")
+        operator_role = os.getenv("OPERATOR_ROLE", "operator").strip()
+        if operator_role not in ("operator", "viewer"):
+            raise ValueError("OPERATOR_ROLE must be 'operator' or 'viewer'")
         return cls(
             db_host=os.getenv("DB_HOST", "postgres"),
             db_port=_int_env("DB_PORT", 5432),
@@ -64,6 +81,17 @@ class Settings:
             chat_temperature=temperature,
             chat_max_tokens=_int_env("CHAT_MAX_TOKENS", 1024),
             chat_timeout_seconds=_int_env("CHAT_TIMEOUT_SECONDS", 120),
+            operator_username=os.getenv("OPERATOR_USERNAME", "").strip(),
+            operator_password_hash=os.getenv("OPERATOR_PASSWORD_HASH", "").strip(),
+            operator_role=operator_role,
+            auth_session_ttl_seconds=_int_env("AUTH_SESSION_TTL_SECONDS", 8 * 3600, minimum=60),
+            login_max_failures=_int_env("LOGIN_MAX_FAILURES", 5),
+            login_failure_window_seconds=_int_env("LOGIN_FAILURE_WINDOW_SECONDS", 300),
+            login_max_concurrent=_int_env("LOGIN_MAX_CONCURRENT", 2),
+            chat_rate_limit=_int_env("CHAT_RATE_LIMIT", 5),
+            chat_rate_window_seconds=_int_env("CHAT_RATE_WINDOW_SECONDS", 60),
+            pump_on_rate_limit=_int_env("PUMP_ON_RATE_LIMIT", 6),
+            pump_on_rate_window_seconds=_int_env("PUMP_ON_RATE_WINDOW_SECONDS", 60),
             cors_origins=tuple(
                 origin.strip().rstrip("/")
                 for origin in os.getenv(

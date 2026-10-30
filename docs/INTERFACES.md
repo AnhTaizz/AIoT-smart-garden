@@ -334,7 +334,7 @@ Tiền tố cho biết bên nào phát ra, để UI không nói "thiết bị t�
 
 ### 9. REST
 
-Web phục vụ qua cùng origin dashboard `/api`. App Android (Capacitor, BC-01) gọi trực tiếp origin HTTPS của FastAPI, không có tiền tố `/api`; trình duyệt chỉ được đọc phản hồi khác origin nếu origin nằm trong `CORS_ORIGINS` (CORS không phải xác thực). Mọi lỗi dùng chung một dạng thân phản hồi, kể cả 422:
+Web phục vụ qua cùng origin dashboard `/api`. App Android (Capacitor, BC-01) gọi trực tiếp origin HTTPS của FastAPI, không có tiền tố `/api`; trình duyệt chỉ được đọc phản hồi khác origin nếu origin nằm trong `CORS_ORIGINS` (CORS không phải xác thực; `Authorization` nằm trong danh sách header được phép). Mọi lỗi dùng chung một dạng thân phản hồi, kể cả 422:
 
 ```json
 {"detail": {"code": "no_telemetry", "message": "Thiết bị chưa có telemetry nào được lưu."}}
@@ -530,11 +530,40 @@ Backend chọn `limit` bản ghi **mới nhất** theo `received_at` trong kho�
 | Backend mất kết nối broker | 503 | `mqtt_unavailable` |
 | Publish thất bại sau khi đã tạo command | 503 | `backend_publish_failed`, command thành `rejected` với `reason: "backend:publish_failed"` |
 | PostgreSQL không dùng được | 503 | `database_unavailable` |
-| Lệnh bơm (ON hoặc OFF) đến qua tunnel/proxy công khai — đề xuất BC-01 | 403 | `remote_control_disabled`; kiểm tra trước DB/MQTT nên không tạo command, không publish |
 
 UI hiển thị 404 `no_telemetry`/`no_state` là trạng thái rỗng ("chưa có dữ liệu"), không phải lỗi hệ thống. Các mã 5xx hoặc mất kết nối là lỗi API và phải hiển thị khác trạng thái rỗng.
 
-**Bổ sung đề xuất BC-01 (chưa được nhóm xác nhận, tương thích ngược):** `GET /control-access` → `200 {"commands_allowed": true, "reason": null}` cho request từ laptop/Docker/LAN, hoặc `{"commands_allowed": false, "reason": "remote_control_disabled"}` khi request mang dấu hiệu tunnel (`Cf-Connecting-Ip`, `Cf-Ray`, `CDN-Loop: cloudflare`, hoặc `X-Forwarded-For`/`Forwarded`/`X-Real-IP`/socket peer ngoài danh sách mạng local trong `backend/app/access.py`). UI chỉ mở nút khi nhận đúng `commands_allowed: true`; lỗi, timeout hoặc payload khác đều giữ khóa. Backend vẫn tự chặn ở `POST /devices/{id}/commands`. Đây là rào chắn tạm cho tới khi có xác thực API (BC-02), không phải cơ chế xác thực, không chống được mọi đường truy cập Internet; endpoint điều khiển chưa an toàn để công khai trực tiếp. Không đổi MQTT topic/payload, QoS hay vòng đời command.
+**Xác thực REST — đề xuất BC-02 (chưa được nhóm xác nhận; thay đổi không tương thích ngược với client chưa đăng nhập):**
+
+Mọi endpoint dữ liệu, lịch sử, lệnh, `/control-access`, `/auth/me`, `/auth/logout` và `/chat` yêu cầu header `Authorization: Bearer <access_token>`. Chỉ `GET /health`, `GET /ready` và `POST /auth/login` là public (`/openapi.json`, `/docs` không chứa dữ liệu vườn). IP, header Cloudflare/`X-Forwarded-*` và CORS không được dùng làm bằng chứng xác thực. MQTT topic/payload, QoS và vòng đời command G02 **không đổi**.
+
+`POST /auth/login` với `{"username": "...", "password": "..."}` → `200`:
+
+```json
+{
+  "access_token": "<chuỗi ngẫu nhiên, opaque>",
+  "token_type": "bearer",
+  "expires_at": "2026-10-30T20:00:00.000000Z",
+  "user": {"username": "operator", "role": "operator"}
+}
+```
+
+`GET /auth/me` → `200 {"user": {"username", "role"}, "expires_at"}`. `POST /auth/logout` → `200 {"status": "logged_out"}`; token bị thu hồi ngay ở server. Client chỉ được báo "đã thu hồi ở máy chủ" khi nhận 200 (hoặc 401: token đã không còn hiệu lực); lỗi mạng/timeout/5xx nghĩa là chưa xác nhận thu hồi. `GET /control-access` → `200 {"commands_allowed": true, "reason": null, "role": "operator"}` hoặc `{"commands_allowed": false, "reason": "forbidden", "role": "viewer"}`. UI chỉ mở nút khi nhận đúng `commands_allowed: true`; backend vẫn tự kiểm tra ở mọi `POST /devices/{id}/commands`.
+
+| Tình huống | Mã HTTP | `code` |
+| --- | --- | --- |
+| Thiếu/sai dạng header Bearer | 401 (`WWW-Authenticate: Bearer`) | `auth_required` |
+| Token không tồn tại, hết hạn, đã logout hoặc tài khoản cấu hình đã đổi | 401 | `invalid_session` |
+| Sai tên đăng nhập/mật khẩu | 401 | `invalid_credentials` |
+| Backend chưa cấu hình tài khoản hợp lệ (fail closed) | 503 | `auth_not_configured` |
+| Tài khoản `viewer` gửi lệnh | 403 | `forbidden` |
+| Đăng nhập sai quá `LOGIN_MAX_FAILURES` lần trong `LOGIN_FAILURE_WINDOW_SECONDS` | 429 + `Retry-After` | `login_rate_limited` |
+| `/chat` quá `CHAT_RATE_LIMIT` lượt/cửa sổ cho mỗi tài khoản | 429 + `Retry-After` | `chat_request_rate_limited` |
+| Quá `LOGIN_MAX_CONCURRENT` phép kiểm tra mật khẩu đang chạy (BC-02.1) | 429 + `Retry-After: 2` | `login_busy` |
+| `pump_on` quá `PUMP_ON_RATE_LIMIT` lượt/cửa sổ cho mỗi thiết bị (`pump_off` không bị giới hạn này nhưng vẫn có thể lỗi 503 khi broker/DB lỗi) | 429 + `Retry-After` | `command_rate_limited` |
+| `CHAT_API_URL` chưa cấu hình | 503 | `chat_unavailable`, `reason: "not_configured"` |
+
+Thứ tự kiểm tra ở `POST /devices/{id}/commands`: xác thực (401) → quyền (403) → kiểm tra thời lượng (422) → broker (503) → giới hạn `pump_on` (429) → tạo command và publish. Request bị chặn ở các bước trước không tạo bản ghi command và không publish MQTT. Thân 429 có thêm `retry_after_seconds`. Mục `remote_control_disabled` của BC-01 đã bị thay bằng kiểm tra phiên/role.
 
 ### 10. Tham số thời gian của M1
 

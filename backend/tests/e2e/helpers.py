@@ -1,7 +1,9 @@
 """Shared helpers for e2e tests against a running stack.
 
 Every test run uses a fresh device_id, so e2e traffic never mixes with the
-demo device `node_01`.
+demo device `node_01`. Since BC-02 the API requires a bearer session: set
+E2E_OPERATOR_USERNAME and E2E_OPERATOR_PASSWORD to the operator account the
+stack was started with (never commit them).
 """
 
 import json
@@ -20,6 +22,9 @@ API = os.getenv("E2E_API_BASE_URL", "").rstrip("/")
 MQTT_HOST = os.getenv("E2E_MQTT_HOST", "127.0.0.1")
 MQTT_PORT = int(os.getenv("E2E_MQTT_PORT", "1883"))
 TELEMETRY_SCHEMA = "telemetry-v1"
+OPERATOR_USERNAME = os.getenv("E2E_OPERATOR_USERNAME", "")
+OPERATOR_PASSWORD = os.getenv("E2E_OPERATOR_PASSWORD", "")
+_session_token: str | None = None
 
 
 def new_device_id() -> str:
@@ -30,19 +35,48 @@ def new_boot_id() -> str:
     return f"boot_{uuid.uuid4().hex[:8]}"
 
 
-def request(method, path, body=None):
+def raw_request(method, url, body=None, headers=None):
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(
-        API + path,
+        url,
         data=data,
         method=method,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **(headers or {})},
     )
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             return response.status, json.loads(response.read() or b"null")
     except urllib.error.HTTPError as error:
         return error.code, json.loads(error.read() or b"null")
+
+
+def login(username=None, password=None):
+    """Create a new session; returns (status, body)."""
+    return raw_request("POST", API + "/auth/login", {
+        "username": OPERATOR_USERNAME if username is None else username,
+        "password": OPERATOR_PASSWORD if password is None else password,
+    })
+
+
+def auth_headers():
+    """Bearer header for one shared operator session, logged in on first use."""
+    global _session_token
+    if _session_token is None:
+        if not (OPERATOR_USERNAME and OPERATOR_PASSWORD):
+            raise RuntimeError(
+                "Set E2E_OPERATOR_USERNAME/E2E_OPERATOR_PASSWORD for the stack's operator account"
+            )
+        status, body = login()
+        if status != 200:
+            raise RuntimeError(f"E2E operator login failed with HTTP {status}")
+        _session_token = body["access_token"]
+    return {"Authorization": f"Bearer {_session_token}"}
+
+
+def request(method, path, body=None, headers=None, auth=True):
+    """Call the API directly; authenticated as the operator unless auth=False."""
+    merged = {**(auth_headers() if auth else {}), **(headers or {})}
+    return raw_request(method, API + path, body, merged)
 
 
 def wait_for(predicate, timeout=10.0, interval=0.2, message="condition not met"):

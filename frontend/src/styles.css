@@ -1069,3 +1069,111 @@ footer span:first-child {
     flex-direction: column;
   }
 }
+
+/* Login (BC-02) */
+.login-main {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  gap: 14px;
+}
+
+.login-card h1 {
+  margin: 8px 0 0;
+  color: var(--green-950);
+  font-size: 1.5rem;
+}
+
+.login-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.login-notice {
+  color: var(--green-800);
+  background: var(--green-50);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-form label {
+  margin-top: 6px;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.login-form input {
+  padding: 11px 12px;
+  border: 1px solid #c8d8ce;
+  border-radius: 10px;
+  color: var(--ink);
+  background: white;
+  font: inherit;
+}
+
+.login-form input:focus-visible {
+  outline: 2px solid var(--green-500);
+  outline-offset: 1px;
+}
+
+.login-submit {
+  min-height: 48px;
+  margin-top: 10px;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.login-submit:disabled {
+  border-color: #dce3df;
+  color: #9aa8a1;
+  background: #eef2f0;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.session-badge {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.logout-button {
+  padding: 6px 12px;
+}
+
+@media (max-width: 820px) {
+  /* The logout button reuses .refresh-button but must not go full width. */
+  .refresh-button.logout-button {
+    width: auto;
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar {
+    gap: 8px;
+  }
+
+  .header-meta .node-badge {
+    display: none;
+  }
+
+  .session-badge {
+    max-width: 28vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

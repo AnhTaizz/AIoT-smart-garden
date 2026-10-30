@@ -9,6 +9,9 @@ services:
       E2E_API_BASE_URL: http://backend:8000
       E2E_MQTT_HOST: mosquitto
       E2E_PROXY_URL: http://frontend/api
+      # Plaintext password of the stack's operator account; local .env only.
+      E2E_OPERATOR_USERNAME: ${OPERATOR_USERNAME:?Set OPERATOR_USERNAME in .env}
+      E2E_OPERATOR_PASSWORD: ${E2E_OPERATOR_PASSWORD:?Set E2E_OPERATOR_PASSWORD in .env}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:?Set POSTGRES_DB in .env}

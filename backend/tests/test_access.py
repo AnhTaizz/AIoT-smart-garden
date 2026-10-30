@@ -16,7 +16,7 @@ from app.main import app
     ({"x-real-ip": "172.18.0.5", "x-forwarded-for": "192.168.1.23"}, "172.18.0.5"),  # LAN phone via Nginx
     ({"x-forwarded-for": "10.0.0.2, 172.18.0.1"}, "172.18.0.5"),
     ({"forwarded": 'for="[fd00::7]:5000";proto=http'}, "::1"),
-    ({"x-forwarded-for": "100.64.3.4"}, "127.0.0.1"),  # CGNAT/VPN range is not public
+    ({"x-forwarded-for": "fe80::1%eth0"}, "127.0.0.1"),  # link-local with zone id
     ({}, "testclient"),
     ({}, None),
 ])
@@ -34,6 +34,10 @@ def test_laptop_docker_and_lan_requests_are_local(headers, client_host):
     ({"x-forwarded-for": "::ffff:1.1.1.1"}, "127.0.0.1"),
     ({"x-forwarded-for": "unknown"}, "127.0.0.1"),  # unparsable hop fails closed
     ({}, "8.8.8.8"),  # API port reached directly from the Internet
+    ({"x-forwarded-for": "100.64.3.4"}, "127.0.0.1"),  # CGNAT/VPN overlay (e.g. Tailscale)
+    ({}, "100.100.1.2"),
+    ({"x-forwarded-for": "2001:4860::8888"}, "::1"),  # global IPv6
+    ({"x-forwarded-for": "0.0.0.0"}, "127.0.0.1"),
 ])
 def test_tunnel_and_public_requests_are_remote(headers, client_host):
     assert is_remote(headers, client_host) is True

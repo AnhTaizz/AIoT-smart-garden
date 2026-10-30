@@ -6,10 +6,16 @@ arrived through a public tunnel or reverse proxy (Cloudflare, ngrok, ...) may
 read telemetry and state but must not publish device commands. Requests from
 the laptop itself, the Docker network or the trusted LAN keep working.
 
-This is a guard rail, not authentication: it relies on proxies identifying
-themselves, which Cloudflare always does and other common tunnels do through
-X-Forwarded-For. Headers only ever make a request *more* restricted, so
-spoofing them cannot unlock control.
+This is a guard rail, NOT authentication, and it does not make the command
+endpoint safe to expose to the Internet:
+- Client headers are never evidence of trust. They can only make a request
+  *more* restricted (a header that looks like a tunnel locks control); their
+  absence proves nothing about who the caller is.
+- It relies on proxies identifying themselves (Cloudflare always adds
+  Cf-Connecting-Ip/Cf-Ray; ngrok-style tunnels add X-Forwarded-For). A path
+  that hides the origin, e.g. a router port-forward through a NAT that
+  rewrites the source address, or anyone already on the trusted LAN, is not
+  detected.
 """
 
 import ipaddress
@@ -24,6 +30,17 @@ REMOTE_CONTROL_DISABLED = "remote_control_disabled"
 # Cloudflare sets these on every proxied request; a client cannot remove them.
 CLOUDFLARE_HEADERS = ("cf-connecting-ip", "cf-ray")
 
+# Explicit allow-list: loopback, RFC 1918 LAN/Docker, link-local, IPv6 ULA.
+# Everything else is remote, including CGNAT/VPN overlays (100.64.0.0/10,
+# e.g. Tailscale), which are a way in from the Internet.
+LOCAL_NETWORKS = tuple(
+    ipaddress.ip_network(network)
+    for network in (
+        "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+        "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10",
+    )
+)
+
 
 class ControlAccess(BaseModel):
     commands_allowed: bool
@@ -31,7 +48,7 @@ class ControlAccess(BaseModel):
 
 
 def _is_local_address(value: str) -> bool | None:
-    """True for loopback/private/link-local, False for public, None if unparsable."""
+    """True for a LOCAL_NETWORKS address, False otherwise, None if unparsable."""
     text = value.strip().strip('"')
     if text.startswith("["):  # [IPv6] or [IPv6]:port
         text = text[1:].split("]", 1)[0]
@@ -43,7 +60,7 @@ def _is_local_address(value: str) -> bool | None:
         return None
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
         address = address.ipv4_mapped
-    return not address.is_global
+    return any(address in network for network in LOCAL_NETWORKS)
 
 
 def _forwarded_for(value: str) -> list[str]:

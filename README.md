@@ -1,6 +1,6 @@
 # Smart Garden — Kế hoạch triển khai 7 tuần
 
-Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` hiện có khung hạ tầng development và dashboard React cơ bản. [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2) đã triển khai backend/simulator hai chiều gồm MQTT ingest, PostgreSQL, latest/history API và command/ACK/state; phần này chưa merge, còn frontend telemetry/command và phiên smartphone LAN vẫn chưa có.
+Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` đã có backend/simulator hai chiều (PR #2: MQTT ingest, PostgreSQL, latest/history API, command/ACK/state), dashboard React telemetry + điều khiển bơm (PR #3) và chatbot Qwen3 (PR #5). Nhánh BC-01 bổ sung Capacitor Android, cấu hình API HTTPS cho mobile và CORS; xem [báo cáo BC-01](docs/BC-01_REPORT.md). Phiên smartphone thật qua LAN và M1 vẫn **chưa nghiệm thu**; trạng thái chi tiết ở [PROJECT_STATE](docs/PROJECT_STATE.md).
 
 Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
 
@@ -51,6 +51,7 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | [WORKFLOW](docs/WORKFLOW.md) | Task, review, Git, GitHub và xử lý chậm tiến độ |
 | [PROJECT_STATE](docs/PROJECT_STATE.md) | Trạng thái thực tế và việc tiếp theo |
 | [PR2_TEST_HANDOFF_2026-09-26](docs/PR2_TEST_HANDOFF_2026-09-26.md) | Bằng chứng regression và bàn giao API cho C-W1 |
+| [BC-01_REPORT](docs/BC-01_REPORT.md) | Audit repo, tích hợp mobile + chatbot, kết quả test và việc cho BC-02 |
 | [WEEKLY_REVIEW](docs/templates/WEEKLY_REVIEW.md) | Mẫu nghiệm thu tuần và ghi kết quả |
 
 Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_request_template.md`.
@@ -139,6 +140,12 @@ Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/ready
 ```
 
 `/health` chỉ xác nhận tiến trình API hoạt động. `/ready` thực hiện `SELECT 1` trên PostgreSQL và trả HTTP 503 khi database không kết nối được.
+
+## App Android và truy cập từ xa (BC-01)
+
+Cùng một codebase React được đóng gói bằng Capacitor Android (`frontend/android`). Web giữ `/api` cùng origin; app Android gọi **trực tiếp** backend qua URL HTTPS cấu hình lúc build (`VITE_API_URL` trong `frontend/.env.mobile.local`, không commit). Cách build/cài APK xem [frontend/README](frontend/README.md#app-android-capacitor).
+
+**Giới hạn an toàn:** API chưa có xác thực. Request đi qua tunnel/proxy công khai (Cloudflare Quick Tunnel, ngrok, …) chỉ được **đọc** telemetry/state/lịch sử lệnh và dùng chatbot; `POST /devices/{id}/commands` trả `403 remote_control_disabled`, dashboard khóa nút bơm và giải thích lý do. Vì app Android luôn đi qua URL HTTPS công khai, app hiện chỉ giám sát. Điều khiển bơm từ điện thoại dùng LAN demo ở trên. CORS (`CORS_ORIGINS`) chỉ là chính sách trình duyệt, không phải xác thực. Mở lại điều khiển từ xa là việc của BC-02 sau khi có kiểm soát truy cập.
 
 ## Xem log
 

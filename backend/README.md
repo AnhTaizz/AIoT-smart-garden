@@ -1,8 +1,8 @@
 # Backend
 
-Chatbot trên nhánh `finetuneAI`: `POST /chat` kết nối API Kaggle tùy chỉnh, trả `reply/context/prompt_version`. Cấu hình `CHAT_*` chỉ ở backend; xem [hướng dẫn chatbot](../docs/CHATBOT.md). Kiểm thử cô lập bằng `python -m pytest -q tests/test_chat.py tests/test_validation.py`.
+Chatbot (PR #5): `POST /chat` kết nối API Kaggle tùy chỉnh, trả `reply/context/prompt_version`. Cấu hình `CHAT_*` chỉ ở backend; xem [hướng dẫn chatbot](../docs/CHATBOT.md). Kiểm thử cô lập bằng `python -m pytest -q tests/test_chat.py tests/test_validation.py`.
 
-Trạng thái: B-W1-01 và B-W1-02 đã triển khai theo bản đề xuất v1 cho G02, chờ Toản (C) review và chờ nhóm chốt contract. Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
+Trạng thái: B-W1-01 và B-W1-02 đã merge vào `main` (PR #2); BC-01 thêm CORS cấu hình được và chặn lệnh bơm từ xa (`app/access.py`). Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
 
 FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 
@@ -16,6 +16,9 @@ FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 | File | Vai trò |
 | --- | --- |
 | `app/main.py` | Lifespan, REST endpoint, thân lỗi chuẩn hóa |
+| `app/chat.py` | `POST /chat`: gọi API Kaggle, gắn bản chụp vườn, chặn khẳng định sai về thiết bị |
+| `app/http_config.py` | CORS allow-list tường minh (không wildcard, không credentials) |
+| `app/access.py` | Phân biệt request local/LAN với request qua tunnel/Internet cho lệnh bơm |
 | `app/mqtt_bridge.py` | paho-mqtt chạy thread riêng, chuyển bản tin vào `asyncio.Queue` |
 | `app/ingest.py` | Validate bản tin MQTT, lưu dữ liệu hợp lệ, ghi bản tin lỗi |
 | `app/schemas.py` | Pydantic model cho telemetry/ACK/state/command v1 |
@@ -36,6 +39,12 @@ Qua dashboard dùng tiền tố `/api` (Nginx/Vite proxy); gọi trực tiếp F
 | `GET /commands/{command_id}` | `pending`/`applied`/`rejected`/`timeout` kèm `device_ack`, `reason`, bằng chứng state và `late_ack` |
 | `GET /devices/{id}/commands?limit=20` | `{device_id, count, items}` sắp theo `command_sequence` giảm dần |
 | `GET /devices/{id}/state` | State thiết bị tự báo gần nhất kèm `boot_id`, `state_sequence`, `stale`; 404 `no_state` |
+| `GET /control-access` | `{"commands_allowed": bool, "reason": "remote_control_disabled" \| null}` cho chính request này; UI dùng để khóa nút bơm |
+| `POST /chat` | Tư vấn nông nghiệp; không publish command |
+
+### Lệnh bơm chỉ từ laptop/LAN (BC-01)
+
+API chưa có xác thực, nên `POST /devices/{id}/commands` trả **403 `remote_control_disabled`** (trước khi chạm DB/MQTT) nếu request mang dấu hiệu đi qua tunnel/proxy công khai: header `Cf-Connecting-Ip`/`Cf-Ray`/`CDN-Loop: cloudflare`, hoặc `X-Forwarded-For`/`Forwarded`/`X-Real-IP` chứa IP public hay giá trị không parse được, hoặc socket peer là IP public. Laptop, mạng Docker, LAN và dải CGNAT/VPN `100.64.0.0/10` vẫn gửi lệnh được. Đọc telemetry/state/command và `/chat` không bị chặn. Đây là rào chắn tạm, không phải xác thực: nó dựa vào việc proxy tự khai báo (Cloudflare luôn làm vậy); thêm header chỉ làm request bị hạn chế hơn nên không thể dùng để mở khóa. Một proxy công khai không gửi các header trên (ví dụ port-forward thẳng từ router) sẽ không bị nhận diện, vì vậy vẫn không public cổng API/MQTT.
 
 Mọi lỗi dùng chung một dạng, kể cả 422:
 
@@ -82,6 +91,8 @@ Telemetry trùng `device_id` + `boot_id` + `sequence` bị **bỏ qua im lặng*
 | `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng; giá trị nháp chờ G02 |
 | `COMMAND_MAX_DURATION_SECONDS` | 120 | Chỉ kiểm tra input; thiết bị vẫn giữ giới hạn bơm riêng |
 | `TELEMETRY_STALE_SECONDS` | 30 | Ngưỡng `stale` cho `/latest` và `/state` |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost` | Danh sách origin cách nhau bằng dấu phẩy; `*` bị từ chối khi khởi động; rỗng = tắt CORS. Web cùng origin qua `/api` không cần thêm. CORS không phải xác thực |
+| `CHAT_API_URL`, `CHAT_API_KEY`, `CHAT_TEMPERATURE`, `CHAT_MAX_TOKENS`, `CHAT_TIMEOUT_SECONDS` | Xem `.env.example` | Chỉ ở backend; xem [CHATBOT](../docs/CHATBOT.md) |
 
 ## Chạy và kiểm tra
 
@@ -115,6 +126,14 @@ Chạy E2E từ máy host khi Compose đang hoạt động (runner đọc `.env`
 
 Chạy từ root repo. Lệnh đầu kiểm tra IoT; lệnh thứ hai gọi Kaggle thật qua Nginx, dùng device ID ngẫu nhiên và telemetry mô phỏng. Các test chat xác nhận dữ liệu từ MQTT/DB đi vào context, tắt context đúng và không publish command; không chấm chất lượng nông học.
 
+Cách gọn nhất trên stack thật (unit + E2E + simulator, không in mật khẩu DB; E2E dùng `device_id` riêng, không điều khiển `node_01`):
+
+```bash
+docker compose -f compose.yaml -f compose.test.yaml --profile tests run --build --rm regression-tests
+```
+
+`tests/e2e/test_remote_access_e2e.py` kiểm tra lệnh bơm qua header tunnel bị 403, không được lưu/publish, trong khi lệnh local vẫn đi hết vòng đời; ca qua Nginx cần `E2E_PROXY_URL` (service test đặt `http://frontend/api`). `tests/test_access.py` và `tests/test_http_config.py` là unit test cho chặn từ xa và CORS.
+
 Backend cần Python ≥ 3.11 nên chạy test trong container. Unit test không cần DB:
 
 ```bash
@@ -140,5 +159,5 @@ Trên Git Bash (Windows) thêm `MSYS_NO_PATHCONV=1` và dùng `$(pwd -W)/backend
 - Bản tin đến khi PostgreSQL đang down bị log lỗi và bỏ qua (không buffer lâu dài); command khi DB down trả 503 và không được publish.
 - MQTT subscriber dùng clean session: ACK/state gửi lúc backend tắt sẽ mất, command khi đó về `timeout`.
 - Backend học `boot_id` từ state nên một state của boot chưa từng thấy luôn được coi là boot mới; không có thứ tự tuyệt đối giữa hai boot chưa biết.
-- Chưa có xác thực API/MQTT (chỉ dùng trong LAN tin cậy, xem `compose.lan.yaml`).
+- Chưa có xác thực API/MQTT (chỉ dùng trong LAN tin cậy, xem `compose.lan.yaml`). Request qua tunnel bị chặn gửi lệnh bơm nhưng vẫn đọc được dữ liệu và gọi `/chat` (tốn tài nguyên Kaggle); không public MQTT/PostgreSQL.
 - Chưa kiểm tra với ESP32 thật; đồng bộ giờ cho ESP32 là đầu việc trước M2 (xem `docs/INTERFACES.md`).

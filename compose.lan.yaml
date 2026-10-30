@@ -1,6 +1,6 @@
-# Legacy LAN user access: DEPRECATED FOR USER ACCESS.
-# Retained for previous demos. New Internet demos use compose.device.yaml
-# for ESP32 MQTT only, and Cloudflare Quick Tunnels for Web/API.
+# Local LAN demo override. Use only on a trusted Wi-Fi/hotspot.
+# This is the phone path that may control the pump; tunnelled/Internet
+# requests are read-only until the API has authentication (BC-02).
 services:
   mosquitto:
     ports: !override

@@ -334,7 +334,7 @@ Tiền tố cho biết bên nào phát ra, để UI không nói "thiết bị t�
 
 ### 9. REST
 
-Backend chỉ phục vụ qua cùng origin dashboard `/api`. Mọi lỗi dùng chung một dạng thân phản hồi, kể cả 422:
+Web phục vụ qua cùng origin dashboard `/api`. App Android (Capacitor, BC-01) gọi trực tiếp origin HTTPS của FastAPI, không có tiền tố `/api`; trình duyệt chỉ được đọc phản hồi khác origin nếu origin nằm trong `CORS_ORIGINS` (CORS không phải xác thực). Mọi lỗi dùng chung một dạng thân phản hồi, kể cả 422:
 
 ```json
 {"detail": {"code": "no_telemetry", "message": "Thiết bị chưa có telemetry nào được lưu."}}
@@ -530,8 +530,11 @@ Backend chọn `limit` bản ghi **mới nhất** theo `received_at` trong kho�
 | Backend mất kết nối broker | 503 | `mqtt_unavailable` |
 | Publish thất bại sau khi đã tạo command | 503 | `backend_publish_failed`, command thành `rejected` với `reason: "backend:publish_failed"` |
 | PostgreSQL không dùng được | 503 | `database_unavailable` |
+| Lệnh bơm (ON hoặc OFF) đến qua tunnel/proxy công khai — đề xuất BC-01 | 403 | `remote_control_disabled`; kiểm tra trước DB/MQTT nên không tạo command, không publish |
 
-UI hiển thị 404 `no_telemetry`/`no_state` là trạng thái rỗng ("chưa có dữ liệu"), không phải lỗi hệ thống.
+UI hiển thị 404 `no_telemetry`/`no_state` là trạng thái rỗng ("chưa có dữ liệu"), không phải lỗi hệ thống. Các mã 5xx hoặc mất kết nối là lỗi API và phải hiển thị khác trạng thái rỗng.
+
+**Bổ sung đề xuất BC-01 (chưa được nhóm xác nhận, tương thích ngược):** `GET /control-access` → `200 {"commands_allowed": true, "reason": null}` cho request từ laptop/Docker/LAN, hoặc `{"commands_allowed": false, "reason": "remote_control_disabled"}` khi request mang dấu hiệu tunnel (`Cf-Connecting-Ip`, `Cf-Ray`, `CDN-Loop: cloudflare`, hoặc `X-Forwarded-For`/`Forwarded`/`X-Real-IP` có IP public). UI chỉ dùng kết quả này để khóa nút; backend vẫn tự chặn ở `POST /devices/{id}/commands`. Đây là rào chắn tạm cho tới khi có xác thực API (BC-02), không phải cơ chế xác thực. Không đổi MQTT topic/payload, QoS hay vòng đời command.
 
 ### 10. Tham số thời gian của M1
 

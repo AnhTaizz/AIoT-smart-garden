@@ -64,6 +64,8 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### B-W3-01 — API mode/cấu hình và nhật ký tưới
 
+- **Mở rộng phạm vi 2026-10-31:** Weather-aware Auto thuộc W3. B gọi/cache Open-Meteo qua FastAPI, kiểm tra forecast fresh/stale/unavailable, tạo REST đọc thời tiết (cần auth), lưu nguồn/thời điểm/lý do khuyến nghị hoãn tưới. Trước khi có G02 review, chỉ triển khai Weather API read-only và advisory dry-run; **không gửi ON** hoặc thay firmware. Xem [kế hoạch W3 local](../W3_WEATHER_LOCAL_EXECUTION_PLAN.md).
+
 - **Owner:** Tài. **Reviewer:** Toản. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** B-W2-02, A-W3-01.
 - **Đầu ra:** Cấu hình được kiểm tra; lịch sử lý do tưới.
@@ -73,6 +75,8 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### B-W3-02 — Kiểm tra phục hồi và hỗ trợ MVP
+
+- **Mở rộng:** regression Weather API timeout/429/5xx, stale cache, backend restart, mất Internet/MQTT, duplicate/expired advisory, lỗi cảm biến và STOP. Phân biệt simulator với phần cứng thật; dùng Claude Code local để chạy stack/E2E và lưu bằng chứng; không nâng M3 PASS chỉ bằng unit test.
 
 - **Owner:** Tài. **Reviewer:** Toản. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** B-W3-01, C-W3-01.

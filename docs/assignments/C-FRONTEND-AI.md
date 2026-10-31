@@ -71,6 +71,8 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### C-W3-01 — UI Auto/Manual, cấu hình và lịch sử tưới
 
+- **Mở rộng đề xuất, cần Toản review:** Weather Card từ REST FastAPI, phân biệt forecast với telemetry cảm biến; hiện mưa dự báo, thời điểm cập nhật, freshness và lý do delay/no_delay/unknown. Xem [kế hoạch W3 local](../W3_WEATHER_LOCAL_EXECUTION_PLAN.md).
+
 - **Owner:** Toản. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** C-W2-01, B-W3-01.
 - **Đầu ra:** Màn hình mode/cấu hình/lý do tưới.
@@ -80,6 +82,8 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### C-W3-02 — Kiểm tra UX khi reconnect và lỗi an toàn
+
+- **Mở rộng:** kiểm thử offline/stale/unavailable forecast, lỗi API/auth và trạng thái Manual/Auto/STOP; không báo đã tưới hoặc hoãn tưới khi chưa có trạng thái thiết bị xác nhận.
 
 - **Owner:** Toản. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** C-W2-02, A-W3-01, A-W3-02, B-W3-02.

@@ -608,3 +608,15 @@ G02 AGREED là điều kiện đi trước và **không** đồng nghĩa M1 PASS
 ## Xác nhận
 
 Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2).
+
+
+## W3 Weather-aware Auto — G02 extension PROPOSED (2026-10-31)
+
+**Trạng thái: PROPOSED, CHƯA AGREED.** Yêu cầu chủ dự án: thêm dự báo mưa vào chế độ Auto trong W3. Thành (A) và Toản (C) phải xác nhận trước khi mở các MQTT topic/payload/config mới; firmware vẫn sở hữu quyền quyết định relay, STOP và giới hạn thời gian.
+
+- Backend B lấy Open-Meteo theo tọa độ cấu hình, cache + timeout, thông tin fetched_at/valid_until và đánh dấu fresh/stale/unavailable/disabled. REST weather read-only cần phiên hợp lệ; đường dẫn/schema chính thức chốt sau review. Không phát MQTT hoặc pump_on trong phase read-only.
+- Advisory dry-run đề xuất: delay/no_delay/unknown; reason + khoảng thời gian dự báo + TTL. Forecast stale hoặc không có dữ liệu không được dùng để hoãn Auto thêm lần mới. Ngưỡng xác suất mưa/lượng mưa/ẩm đất và thời gian hoãn chưa chốt.
+- Chỉ khi G02 review: định nghĩa version/payload/expiry/sequence/target boot, ACK và ưu tiên STOP cho firmware. Advisory **chỉ hoãn**, không tự cho lệnh ON. Mọi tình huống bất thường quay về policy soil-local an toàn được phê duyệt.
+- Kiểm thử: fake weather provider, timeout/429/5xx, null/out-of-order/UTC, stale, Wi-Fi/MQTT disconnect, boot, STOP, relay-safe và E2E simulator trước ESP32 thật. Chưa gọi M3 PASS khi chỉ mô phỏng.
+
+Chi tiết: [W3_WEATHER_LOCAL_EXECUTION_PLAN](W3_WEATHER_LOCAL_EXECUTION_PLAN.md).

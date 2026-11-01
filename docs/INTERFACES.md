@@ -624,7 +624,7 @@ Thành (A): xác nhận ngày 2026-09-29. Tài (B): xác nhận ngày 2026-09-29
 
 ## W3 Weather-aware Auto — G02 extension PROPOSED (2026-10-31)
 
-**Trạng thái: PROPOSED, CHƯA AGREED.** Yêu cầu chủ dự án: thêm dự báo mưa vào chế độ Auto trong W3. Thành (A) và Toản (C) phải xác nhận trước khi mở các MQTT topic/payload/config mới; firmware vẫn sở hữu quyền quyết định relay, STOP và giới hạn thời gian.
+**Trạng thái:** Schema REST `GET /weather` **AGREED** ngày 2026-11-01 (Thành, Tài, Toản), xem mục con bên dưới. Phần còn lại (advisory có ngưỡng, MQTT topic/payload/config cho firmware) vẫn **PROPOSED, CHƯA AGREED**. Yêu cầu chủ dự án: thêm dự báo mưa vào chế độ Auto trong W3. Thành (A) và Toản (C) phải xác nhận trước khi mở các MQTT topic/payload/config mới; firmware vẫn sở hữu quyền quyết định relay, STOP và giới hạn thời gian.
 
 - Backend B lấy Open-Meteo theo tọa độ cấu hình, cache + timeout, thông tin fetched_at/valid_until và đánh dấu fresh/stale/unavailable/disabled. REST weather read-only cần phiên hợp lệ; đường dẫn/schema chính thức chốt sau review. Không phát MQTT hoặc pump_on trong phase read-only.
 - Advisory dry-run đề xuất: delay/no_delay/unknown; reason + khoảng thời gian dự báo + TTL. Forecast stale hoặc không có dữ liệu không được dùng để hoãn Auto thêm lần mới. Ngưỡng xác suất mưa/lượng mưa/ẩm đất và thời gian hoãn chưa chốt.
@@ -633,9 +633,9 @@ Thành (A): xác nhận ngày 2026-09-29. Tài (B): xác nhận ngày 2026-09-29
 
 Chi tiết: [W3_WEATHER_LOCAL_EXECUTION_PLAN](W3_WEATHER_LOCAL_EXECUTION_PLAN.md).
 
-### Đã implement read-only — `GET /weather` (2026-11-01, vẫn PROPOSED)
+### `GET /weather` — REST read-only, AGREED 2026-11-01
 
-Nhánh `feat/w3-weather` đã implement bước P2 và đưa dự báo vào ngữ cảnh model (chatbot, supervisor AI). **Không** có topic/payload MQTT mới, không có bảng/migration, không gửi weather tới firmware và không đổi command lifecycle G02. A (Thành) và C (Toản) vẫn cần xác nhận schema dưới đây.
+Thành (A), Tài (B) và Toản (C) xác nhận schema dưới đây ngày 2026-11-01. Nhánh `feat/w3-weather` đã implement bước P2 và đưa dự báo vào ngữ cảnh model (chatbot, supervisor AI). **Không** có topic/payload MQTT mới, không có bảng/migration, không gửi weather tới firmware và không đổi command lifecycle G02. Thay đổi schema này từ nay cần quyết định mới của cả ba người.
 
 - Endpoint: `GET /weather` (qua dashboard `/api/weather`). Cần phiên hợp lệ: anonymous `401 auth_required`, viewer đọc được. Không gắn `device_id` vì tọa độ là cấu hình chung của một vườn (`WEATHER_LATITUDE`/`WEATHER_LONGITUDE`).
 - Nguồn: Open-Meteo Forecast, URL cố định trong backend, `hourly=precipitation_probability,precipitation,temperature_2m`, `forecast_hours=12`, `timeformat=unixtime`. Backend làm mới cache RAM mỗi `WEATHER_REFRESH_SECONDS` (mặc định 1800); request chỉ đọc cache, không gọi provider.

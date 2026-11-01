@@ -17,7 +17,7 @@ FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 | --- | --- |
 | `app/main.py` | Lifespan, REST endpoint, thân lỗi chuẩn hóa |
 | `app/chat.py` | `POST /chat`: gọi API Kaggle, gắn bản chụp vườn, chặn khẳng định sai về thiết bị |
-| `app/weather.py` | `GET /weather`: dự báo Open-Meteo (W3, PROPOSED), cache RAM làm mới định kỳ, chỉ đọc, không phát lệnh |
+| `app/weather.py` | `GET /weather`: dự báo Open-Meteo (W3, schema AGREED 2026-11-01), cache RAM làm mới định kỳ, chỉ đọc, không phát lệnh |
 | `app/http_config.py` | CORS allow-list tường minh (không wildcard, không credentials) |
 | `app/auth.py` | Đăng nhập, hash scrypt, phiên Bearer lưu hash trong PostgreSQL, dependency 401/403, CLI tạo hash |
 | `app/access.py` | Quyền điều khiển theo role của phiên (`/control-access`) |

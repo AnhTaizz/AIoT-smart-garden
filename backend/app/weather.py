@@ -1,4 +1,4 @@
-"""Read-only Open-Meteo forecast for the garden (W3 weather, PROPOSED contract).
+"""Read-only Open-Meteo forecast for the garden (W3; GET /weather agreed 2026-11-01).
 
 - Advisory data only: this module never publishes MQTT, creates commands or
   changes the irrigation guards. A forecast is never a garden measurement.

@@ -10,6 +10,11 @@ Nhánh `finetuneAI` tích hợp trợ lý nông nghiệp Qwen3-8B qua API Kaggle
 
 ## Bắt đầu từ đâu?
 
+Firmware ESP32 hiện có trong [firmware](firmware/README.md), mặc định dry-run và khóa
+điều khiển. Xem [báo cáo đối chiếu phần cứng/tích hợp MQTT](docs/FIRMWARE_INTEGRATION.md)
+cho kết quả phần mềm, khoảng trống AI quyết định tưới và quy trình kiểm tra bắt đầu
+với adapter bơm đã rút. Chưa nghiệm thu firmware mới trên board thật.
+
 1. Đọc [phân công nhóm](docs/TEAM.md), cập nhật GitHub username cho Thành (Embedded), Tài (Backend), Toản (Frontend-AI) và thống nhất người điều phối.
 2. Chốt G01–G03 ở [kế hoạch 7 tuần](docs/ROADMAP.md): phạm vi, giao tiếp và phần cứng.
 3. Mỗi người mở file của mình: [Thành — Thiết bị và firmware (Embedded)](docs/assignments/A-EMBEDDED.md), [Tài — Backend và dữ liệu](docs/assignments/B-BACKEND.md), [Toản — Frontend và AI](docs/assignments/C-FRONTEND-AI.md).

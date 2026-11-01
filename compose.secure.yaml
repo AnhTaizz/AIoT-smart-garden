@@ -1,0 +1,16 @@
+# Apply after compose.yaml (and compose.lan.yaml when LAN access is needed).
+services:
+  mosquitto:
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME:?Set the private broker backend username}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:?Set the private broker backend password}
+    volumes:
+      - ./infra/mosquitto/mosquitto.secure.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./infra/mosquitto/control.acl:/mosquitto/config/control.acl:ro
+      - ./secrets/mosquitto:/mosquitto/secrets:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -u \"$$MQTT_USERNAME\" -P \"$$MQTT_PASSWORD\" -t healthcheck -m ping"]
+  backend:
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME:?Set the private broker backend username}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:?Set the private broker backend password}

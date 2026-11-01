@@ -108,8 +108,10 @@ nguồn phần cứng độc lập, không bảo đảm OFF khi brownout/boot ho
 
 Mode `MANUAL` giữ nguyên tương thích v1: chưa có lệnh cấu hình AUTO trong contract.
 Server có thể quyết định rồi dùng API command hiện có; firmware không tự suy luận mode.
-Theo G02, lỗi AHT20/soil không chặn lệnh MANUAL. AI Server tương lai phải kiểm tra
-dữ liệu null/stale/simulated trước khi yêu cầu tưới tự động.
+Theo G02, lỗi AHT20/soil không chặn lệnh MANUAL. [Supervisor AI](../docs/AI_IRRIGATION.md)
+hỗ trợ ESP32 thật được cấp quyền qua `IRRIGATION_REAL_DEVICE_IDS`, có cấu hình
+credential MQTT và số đo/state hợp lệ; ID thật không nhận dữ liệu simulator.
+Làm theo [quy trình chạy ESP32 thật](../docs/ESP32_REAL_SETUP.md) trước khi bật AUTO.
 
 ## Kiểm thử host (tùy chọn, không cần khi dùng nút Verify)
 

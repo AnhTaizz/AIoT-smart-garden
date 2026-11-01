@@ -1,6 +1,16 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from dataclasses import replace
+import asyncio
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+from uuid import uuid4
+import httpx
+from starlette.requests import Request
 import pytest
+from app import irrigation
 from app.irrigation import Policy, parse_proposal, check_observation
+from app.config import Settings
 
 
 @pytest.fixture
@@ -14,6 +24,148 @@ def observation():
              sensor_status={"soil": "ok", "aht20": "ok"}, soil_moisture_pct=40, temperature_c=28, air_humidity_pct=60)
     s = dict(stale=False, received_at=datetime.now(timezone.utc), boot_id="boot_test", clock_synced=True, relay_state="off", mode="MANUAL")
     return t, s
+
+
+def real_observation():
+    t, s = observation()
+    now = datetime.now(timezone.utc)
+    t.update(device_id="node_01", simulated=False, measured_at=now)
+    s.update(device_id="node_01", reported_at=now)
+    return t, s
+
+
+def test_real_esp32_requires_explicit_device_and_authenticated_broker(policy):
+    t, s = real_observation()
+    assert check_observation(t, s, policy, 30)
+    assert check_observation(t, s, policy, 30, real_device_ids=("node_02",), broker_authenticated=True)
+    assert check_observation(t, s, policy, 30, real_device_ids=("node_01",))
+    assert check_observation(t, s, policy, 30, real_device_ids=("node_01",), broker_authenticated=True) is None
+
+
+def test_real_device_rejects_simulator_with_same_id(policy):
+    t, s = real_observation()
+    t["simulated"] = True
+    assert check_observation(t, s, policy, 30, real_device_ids=("node_01",), broker_authenticated=True)
+
+
+@pytest.mark.parametrize("kind,field,value", [
+    ("telemetry", "sensor_status", {"soil": "error", "aht20": "ok"}),
+    ("telemetry", "soil_moisture_pct", None),
+    ("telemetry", "temperature_c", float("nan")),
+    ("telemetry", "air_humidity_pct", 101),
+    ("telemetry", "clock_synced", False),
+    ("state", "boot_id", "previous_boot"),
+    ("state", "device_id", "node_02"),
+    ("state", "relay_state", "on"),
+    ("state", "mode", "AUTO"),
+])
+def test_real_esp32_keeps_sensor_and_state_protections(policy, kind, field, value):
+    t, s = real_observation()
+    (t if kind == "telemetry" else s)[field] = value
+    assert check_observation(t, s, policy, 30, real_device_ids=("node_01",), broker_authenticated=True)
+
+
+@pytest.mark.parametrize("field", ["measured_at", "reported_at"])
+@pytest.mark.parametrize("offset", [-60, 60])
+def test_real_rejects_old_or_future_device_time(policy, field, offset):
+    t, s = real_observation()
+    (t if field == "measured_at" else s)[field] = datetime.now(timezone.utc) + timedelta(seconds=offset)
+    assert check_observation(t, s, policy, 30, real_device_ids=("node_01",), broker_authenticated=True)
+
+
+def test_real_device_configuration_is_explicit(monkeypatch):
+    monkeypatch.delenv("IRRIGATION_REAL_DEVICE_IDS", raising=False)
+    assert Settings.from_env().irrigation_real_device_ids == ()
+    monkeypatch.setenv("IRRIGATION_REAL_DEVICE_IDS", "node_01, node_02")
+    assert Settings.from_env().irrigation_real_device_ids == ("node_01", "node_02")
+    monkeypatch.setenv("IRRIGATION_REAL_DEVICE_IDS", "garden/+/control")
+    with pytest.raises(ValueError):
+        Settings.from_env()
+
+
+@pytest.mark.parametrize("change", ["none", "simulator", "sensor_error", "reboot", "stop", "over_limit", "invalid_ai", "broker_credentials", "original_measurement_expired"])
+def test_real_supervisor_rechecks_before_dispatch(policy, monkeypatch, change):
+    """In-process physical payloads; all model, storage and command I/O are mocked."""
+    async def run():
+        now = datetime.now(timezone.utc)
+        profile = dict(device_id="node_01", lease_token=uuid4(), policy=policy.model_dump(),
+                       revision=1, enabled=True, lease_until=now + timedelta(seconds=180), last_attempt=None)
+        current = dict(profile)
+        original_t, original_s = real_observation()
+        fresh_t, fresh_s = real_observation()
+        if change == "simulator": fresh_t["simulated"] = True
+        if change == "sensor_error": fresh_t["sensor_status"] = {"soil": "error", "aht20": "ok"}
+        if change == "reboot": fresh_s["boot_id"] = fresh_t["boot_id"] = "new_boot"
+        if change == "stop": current["enabled"] = False
+
+        async def execute(sql, params=()):
+            if "pg_try_advisory_lock" in sql: row = {"acquired": True}
+            elif "SELECT * FROM irrigation_profile" in sql: row = current
+            elif "COALESCE(sum(reserved_seconds)" in sql: row = {"spent": 0}
+            else: row = None
+            return SimpleNamespace(fetchone=AsyncMock(return_value=row))
+
+        conn = SimpleNamespace(execute=AsyncMock(side_effect=execute), commit=AsyncMock(), rollback=AsyncMock())
+        @asynccontextmanager
+        async def connection():
+            yield conn
+        settings = replace(Settings.from_env(), irrigation_real_device_ids=("node_01",),
+                           mqtt_username="test_backend", mqtt_password="test-only")
+        issue = AsyncMock()
+        app = SimpleNamespace(state=SimpleNamespace(settings=settings,
+                              pool=SimpleNamespace(connection=connection), issue_irrigation_command=issue))
+        captured = []
+        async def model_reply(request):
+            captured.append(request)
+            if change == "original_measurement_expired":
+                # Age the captured observation independently of new telemetry.
+                original_t["measured_at"] = now - timedelta(seconds=60)
+            if change == "broker_credentials":
+                app.state.settings = replace(settings, mqtt_password=None)
+            answer = ('{"water":true,"duration_seconds":3,"reason":"Test response"}' if change == "over_limit"
+                      else 'invalid' if change == "invalid_ai"
+                      else '{"water":true,"duration_seconds":2,"reason":"Test response"}')
+            return httpx.Response(200, json={"response": answer})
+        recorded = AsyncMock(return_value=uuid4())
+        monkeypatch.setattr(irrigation, "snapshot", AsyncMock(side_effect=[(original_t, original_s), (fresh_t, fresh_s)]))
+        monkeypatch.setattr(irrigation, "history", AsyncMock(return_value=[]))
+        monkeypatch.setattr(irrigation, "record", recorded)
+        monkeypatch.setattr(irrigation.repository, "list_commands", AsyncMock(return_value=[]))
+        async with httpx.AsyncClient(transport=httpx.MockTransport(model_reply)) as client:
+            app.state.chat_client = client
+            await irrigation.evaluate(app, profile)
+        assert len(captured) == 1
+        if change == "none":
+            issue.assert_awaited_once()
+            call = issue.await_args
+            assert call.args[0] == "node_01"
+            assert call.args[1].action == "pump_on" and call.args[1].duration_seconds == 2
+            assert recorded.await_args.args[3] == "reserved"
+            assert recorded.await_args.args[6] == 2
+            assert call.kwargs["command_id"] == recorded.await_args.args[7]
+        else:
+            issue.assert_not_awaited()
+            assert recorded.await_args.args[3] in ("blocked", "cancelled", "error")
+            assert not any("last_attempt=now()" in call.args[0] for call in conn.execute.await_args_list)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("real_ids,scope", [((), "simulator_only"), (("node_01",), "real_device")])
+def test_profile_reports_server_execution_scope_without_arming(monkeypatch, real_ids, scope):
+    async def run():
+        row = {"device_id": "node_01", "enabled": False, "policy": {}}
+        cursor = SimpleNamespace(fetchone=AsyncMock(return_value=row))
+        conn = SimpleNamespace(execute=AsyncMock(return_value=cursor))
+        @asynccontextmanager
+        async def connection(): yield conn
+        app = SimpleNamespace(state=SimpleNamespace(settings=replace(Settings.from_env(), irrigation_real_device_ids=real_ids),
+                              pool=SimpleNamespace(connection=connection), issue_irrigation_command=AsyncMock()))
+        monkeypatch.setattr(irrigation, "history", AsyncMock(return_value=[]))
+        response = await irrigation.get_profile("node_01", Request({"type": "http", "app": app}))
+        assert response["execution_scope"] == scope
+        assert response["profile"]["enabled"] is False
+        app.state.issue_irrigation_command.assert_not_awaited()
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("raw", [

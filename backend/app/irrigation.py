@@ -1,7 +1,8 @@
-"""AI irrigation supervisor. Initial release deliberately supports simulators only."""
+"""Server-owned AI irrigation with explicit authorization for physical device IDs."""
 import asyncio
 import json
 import logging
+import math
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Literal
@@ -60,12 +61,26 @@ def parse_proposal(value: str) -> Proposal:
     return Proposal.model_validate(json.loads(value))
 
 
-def check_observation(telemetry, state, policy: Policy, stale_seconds: int) -> str | None:
+def check_observation(telemetry, state, policy: Policy, stale_seconds: int, *,
+                      real_device_ids: tuple[str, ...] = (), broker_authenticated: bool = False) -> str | None:
     now = datetime.now(timezone.utc)
     if not telemetry or not state:
         return "Thiếu số đo hoặc trạng thái thiết bị."
-    if not telemetry["simulated"]:
-        return "Phiên bản này chỉ cho phép AUTO trên simulator, chưa cho phép bơm thật."
+    physical = telemetry.get("device_id") in real_device_ids
+    if physical:
+        if telemetry.get("simulated") is not False:
+            return "Thiết bị này được cấu hình là ESP32 thật; không dùng dữ liệu simulator cùng ID."
+        if not broker_authenticated:
+            return "AUTO trên ESP32 thật cần cấu hình MQTT riêng có tài khoản và mật khẩu."
+        if state.get("device_id") != telemetry.get("device_id"):
+            return "Số đo và trạng thái không thuộc cùng thiết bị."
+        for row, field in ((telemetry, "measured_at"), (state, "reported_at")):
+            moment = row.get(field)
+            if (not isinstance(moment, datetime) or moment.tzinfo is None or
+                    abs((now - moment).total_seconds()) > stale_seconds):
+                return "Thời gian đo/báo cáo của ESP32 không hợp lệ hoặc đã cũ; kiểm tra SNTP."
+    elif telemetry.get("simulated") is not True:
+        return "ESP32 này chưa được cấp quyền AUTO trong IRRIGATION_REAL_DEVICE_IDS."
     for row in (telemetry, state):
         if row["stale"] or (now - row["received_at"]).total_seconds() > stale_seconds:
             return "Dữ liệu đã cũ; không tưới."
@@ -77,6 +92,10 @@ def check_observation(telemetry, state, policy: Policy, stale_seconds: int) -> s
         return "Cảm biến lỗi; không tưới."
     if any(telemetry[key] is None for key in ("soil_moisture_pct", "temperature_c", "air_humidity_pct")):
         return "Thiếu giá trị cảm biến."
+    for key, minimum, maximum in (("temperature_c", -40, 85), ("air_humidity_pct", 0, 100), ("soil_moisture_pct", 0, 100)):
+        value = telemetry[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not minimum <= value <= maximum:
+            return "Giá trị cảm biến không hợp lệ; không tưới."
     if state["relay_state"] != "off":
         return "Bơm chưa xác nhận tắt."
     if state.get("mode") != "MANUAL":
@@ -84,6 +103,15 @@ def check_observation(telemetry, state, policy: Policy, stale_seconds: int) -> s
     if telemetry["soil_moisture_pct"] >= policy.moisture_stop_pct:
         return "Độ ẩm đã đạt giới hạn ngừng tưới được cấu hình."
     return None
+
+
+def check_device_observation(app, device_id, telemetry, state, policy):
+    settings = app.state.settings
+    if telemetry and telemetry.get("device_id") and telemetry["device_id"] != device_id:
+        return "Số đo không thuộc thiết bị yêu cầu."
+    return check_observation(telemetry, state, policy, settings.telemetry_stale_seconds,
+                             real_device_ids=settings.irrigation_real_device_ids,
+                             broker_authenticated=bool(settings.mqtt_username and settings.mqtt_password))
 
 
 @asynccontextmanager
@@ -134,7 +162,8 @@ async def get_profile(device_id: str, request: Request, _session: SessionDep):
     async with request.app.state.pool.connection() as conn:
         cursor = await conn.execute("SELECT device_id,enabled,revision,policy,last_status,last_attempt FROM irrigation_profile WHERE device_id=%s", (device_id,))
         row = await cursor.fetchone()
-        return {"profile": row, "decisions": await history(conn, device_id), "execution_scope": "simulator_only"}
+        scope = "real_device" if device_id in request.app.state.settings.irrigation_real_device_ids else "simulator_only"
+        return {"profile": row, "decisions": await history(conn, device_id), "execution_scope": scope}
 
 
 @router.put("/devices/{device_id}/irrigation")
@@ -152,7 +181,7 @@ async def update_profile(device_id: str, body: ProfileUpdate, request: Request, 
     async with device_lock(app.state.pool, device_id) as conn:
         if body.enabled:
             t, s = await snapshot(conn, app, device_id)
-            reason = check_observation(t, s, body.policy, app.state.settings.telemetry_stale_seconds)
+            reason = check_device_observation(app, device_id, t, s, body.policy)
             if reason:
                 raise HTTPException(409, detail={"code": "irrigation_not_ready", "message": reason})
         await conn.execute(
@@ -189,7 +218,7 @@ async def evaluate(app, profile):
             t, s = await snapshot(conn, app, device_id)
             recent = await history(conn, device_id)
         observation = {"telemetry": t, "state": s, "policy": policy.model_dump(), "history": recent[:5], "prompt_version": PROMPT_VERSION}
-        reason = check_observation(t, s, policy, app.state.settings.telemetry_stale_seconds)
+        reason = check_device_observation(app, device_id, t, s, policy)
         if reason:
             async with app.state.pool.connection() as conn:
                 await record(conn, device_id, observation, "blocked", reason)
@@ -213,7 +242,9 @@ async def evaluate(app, profile):
                 await record(conn, device_id, observation, "cancelled", "Cấu hình/chế độ đã đổi khi chờ AI.", proposal)
                 return
             fresh_t, fresh_s = await snapshot(conn, app, device_id)
-            reason = check_observation(fresh_t, fresh_s, policy, app.state.settings.telemetry_stale_seconds)
+            reason = check_device_observation(app, device_id, fresh_t, fresh_s, policy)
+            if not reason and check_device_observation(app, device_id, t, s, policy):
+                reason = "Dữ liệu mà AI dùng không còn hợp lệ; cần đánh giá lại từ số đo mới."
             if (datetime.now(timezone.utc) - t["received_at"]).total_seconds() > app.state.settings.telemetry_stale_seconds:
                 reason = "Số đo mà AI dùng đã hết hạn khi model trả lời; cần đánh giá lại."
             if fresh_s and fresh_s["boot_id"] != s["boot_id"]:

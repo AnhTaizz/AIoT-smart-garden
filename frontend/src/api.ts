@@ -120,6 +120,14 @@ export class ApiError extends Error {
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "/api";
 const apiBaseUrl = configuredBaseUrl.replace(/\/$/, "");
 
+export async function irrigationRequest<T>(deviceId: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  return handleResponse<T>(await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/irrigation`, {
+    method: body === undefined ? "GET" : "PUT", signal,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }));
+}
+
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;

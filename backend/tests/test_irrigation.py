@@ -10,7 +10,11 @@ from starlette.requests import Request
 import pytest
 from app import irrigation
 from app.irrigation import Policy, parse_proposal, check_observation
+from app.auth import Session
 from app.config import Settings
+
+# get_profile is called in-process below, so its SessionDep is passed explicitly.
+VIEWER = Session("test-viewer", "viewer", datetime.now(timezone.utc) + timedelta(hours=1), bytes(32))
 
 
 @pytest.fixture
@@ -110,7 +114,8 @@ def test_real_supervisor_rechecks_before_dispatch(policy, monkeypatch, change):
         async def connection():
             yield conn
         settings = replace(Settings.from_env(), irrigation_real_device_ids=("node_01",),
-                           mqtt_username="test_backend", mqtt_password="test-only")
+                           mqtt_username="test_backend", mqtt_password="test-only",
+                           chat_api_url="http://ai.test/decide")  # mocked model; BC-02 has no default URL
         issue = AsyncMock()
         app = SimpleNamespace(state=SimpleNamespace(settings=settings,
                               pool=SimpleNamespace(connection=connection), issue_irrigation_command=issue))
@@ -161,7 +166,7 @@ def test_profile_reports_server_execution_scope_without_arming(monkeypatch, real
         app = SimpleNamespace(state=SimpleNamespace(settings=replace(Settings.from_env(), irrigation_real_device_ids=real_ids),
                               pool=SimpleNamespace(connection=connection), issue_irrigation_command=AsyncMock()))
         monkeypatch.setattr(irrigation, "history", AsyncMock(return_value=[]))
-        response = await irrigation.get_profile("node_01", Request({"type": "http", "app": app}))
+        response = await irrigation.get_profile("node_01", Request({"type": "http", "app": app}), VIEWER)
         assert response["execution_scope"] == scope
         assert response["profile"]["enabled"] is False
         app.state.issue_irrigation_command.assert_not_awaited()

@@ -7,7 +7,7 @@ Nhánh `integration/smart-garden-unified-20261101` gom BC-01, BC-02, W3 (docs), 
 - Regression bản tích hợp 2026-11-01: backend unit + E2E 239 pass / 2 skip (live Kaggle), simulator 31/31, frontend 75/75 + build, firmware native 95 checks, debug APK build OK. Điện thoại thật, ESP32 thật, iOS, Kaggle thật: NOT TESTED. Đây là PASS thành phần, không đổi trạng thái milestone.
 - Stack demo đã được deploy bản tích hợp ngày 2026-11-01: qua domain thật, anonymous nhận 401, operator đăng nhập/đăng xuất được; frontend Vitest 75/75. Chi tiết ở báo cáo §5a.
 - Domain: `garden` và `garden-api` hoạt động qua Named Tunnel `garden-local`; apex chưa có route; TOEIC trả 502 từ trước, không thuộc phạm vi.
-- Kiến trúc Auto **chưa chốt** (ESP32 / server / supervisor PR #9); xem [INTERFACES](INTERFACES.md#ranh-giới-xử-lý). Weather W3 chưa có code.
+- Kiến trúc Auto: `main` (PR #9 + PR #10) theo hướng server quyết định, có thể điều khiển ESP32 thật khi `IRRIGATION_REAL_DEVICE_IDS` + broker credential được đặt; CLAUDE.md §3 vẫn nói ngược lại, cần nhóm ghi quyết định. Stack demo để AUTO thiết bị thật khóa. Weather W3 chưa có code. Regression sau khi đồng bộ PR #10: backend 266 pass / 2 skip, simulator 31/31, frontend 80/80, firmware 95 checks.
 - Firmware: Arduino IDE dry-run mặc định, chưa nghiệm thu board; nhánh PlatformIO A-W1 chưa hợp nhất.
 
 ## Trạng thái Cloudflare + Remote Mobile — 2026-10-06

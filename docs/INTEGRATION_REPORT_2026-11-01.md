@@ -85,6 +85,16 @@ Lần chạy đầu: 226 pass, 10 fail, đều do ghép PR #9 với BC-02, đã 
 - 3 test auth: `create_command` giờ gọi khóa irrigation, mà `FakePool` của unit test không có DB → fixture `api` thay `irrigation.device_lock` bằng bản no-op (khóa thật đã có E2E cover).
 - 7 test supervisor: BC-02 bỏ URL Kaggle mặc định nên `chat_api_url` rỗng → E2E đặt URL cho model giả lập. Hành vi sản phẩm: `PUT /irrigation` bật AUTO khi chưa có `CHAT_API_URL` giờ trả `503 chat_unavailable/not_configured` thay vì nhận rồi lỗi ở chu kỳ sau. Thêm unit test: anonymous 401, viewer 403, AUTO không có model 503; không publish lệnh nào.
 
+## 5c. Đồng bộ PR #10 (`main` `5b1c110`) — 2026-11-01
+
+Thành merge PR #10 vào `main` sau khi nhánh integration được tạo. Ngoài firmware (`90ac105`, đã có), PR #10 thêm `f356fde`: supervisor AI được điều khiển **ESP32 thật** khi device ID nằm trong `IRRIGATION_REAL_DEVICE_IDS` **và** broker có credential, với telemetry/state thật, còn mới, trong miền hợp lệ.
+
+- Merge `1a59036`: conflict ở `config.py`, `compose.yaml` và docs. Giữ toàn bộ kiểm tra thiết bị thật của `f356fde` cộng auth/503 của integration; `CHAT_API_URL` mặc định vẫn rỗng (BC-02). Mẫu `.env.example` đổi `IRRIGATION_REAL_DEVICE_IDS=node_01` thành rỗng để copy template không cấp quyền tưới thật; `ESP32_REAL_SETUP.md` cập nhật theo.
+- 3 test mới của PR #10 fail trên BC-02 (gọi `get_profile` không có phiên; model giả lập không có URL) → sửa test, không đổi code sản phẩm.
+- Regression trên stack tách biệt: backend **266 PASS**, 2 SKIP (live Kaggle); simulator **31/31**; frontend **80/80** + build; firmware native **95 checks**.
+- Deploy demo: `.env` không đặt `IRRIGATION_REAL_DEVICE_IDS` → `GET /devices/node_01/irrigation` trả `execution_scope: simulator_only`; anonymous 401; admin đăng nhập được; simulator vẫn gửi dữ liệu.
+- Kiến trúc: `main` nay theo hướng **server quyết định tưới**, trái với CLAUDE.md §3. Nhóm cần ghi quyết định chính thức rồi sửa CLAUDE.md/W3; tài liệu đã nêu rõ mâu thuẫn, không tự chọn.
+
 ## 6. Bảo mật — vấn đề mở
 
 1. **Đã xử lý ở §5a (2026-11-01).** Trước khi deploy, stack đang chạy là bản trước BC-02. Container backend build 2026-10-06; OpenAPI công khai không có `/auth`; `GET /devices/node_01/latest` trả 200 cho người lạ qua `garden-api`. Theo tài liệu PR #4, `POST /devices/{id}/commands` cũng không cần xác thực. Hiện không có thiết bị online (telemetry cuối 2026-10-06, `simulated: true`), nên chưa có rủi ro bơm vật lý, nhưng **không kết nối ESP32 bật điều khiển** cho tới khi deploy bản này.

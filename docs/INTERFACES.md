@@ -8,8 +8,11 @@ Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp*
 định tưới trên AI Server; firmware chỉ đo/thực thi/bảo vệ. Xem
 [báo cáo tích hợp](FIRMWARE_INTEGRATION.md) và [README firmware](../firmware/README.md).
 Firmware mới dùng các schema v1 dưới đây, giới hạn ON cục bộ 60 giây và không thêm
-lệnh AUTO. AI irrigation model/contract chưa có trong repo; chatbot hiện vẫn chỉ tư vấn.
+lệnh AUTO. Supervisor AI tưới đã có trong repo, hiện chỉ được phép chạy với simulator;
+telemetry `simulated:false` của ESP32 thật vẫn bị chặn. Chatbot vẫn chỉ tư vấn.
 Các phần mô tả milestone cũ bên dưới là lịch sử kế hoạch; trạng thái G02 vẫn DRAFT.
+
+Cập nhật theo yêu cầu mới: có [supervisor AI tưới cho simulator](AI_IRRIGATION.md), API GET/PUT `/devices/{id}/irrigation` và nhật ký quyết định. Chatbot vẫn chỉ tư vấn. Supervisor không bật tưới thật và không chạy đồng thời AUTO cục bộ của thiết bị; MQTT command/ACK/state giữ nguyên. Nội dung roadmap cũ về AI chưa điều khiển cần đọc cùng phạm vi thử nghiệm mới này; G02 vẫn DRAFT.
 
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
 

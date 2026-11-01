@@ -1,5 +1,16 @@
 # Kiểm tra repository và tích hợp ESP32 — 2026-11-01
 
+**Cập nhật sau merge main `0b039d6`:** repository đã có
+[supervisor AI tưới](AI_IRRIGATION.md), API cấu hình và migration `004_irrigation.sql`.
+Supervisor hiện chỉ cho simulator, chặn số đo `simulated:false`, giữ MQTT v1 và
+không yêu cầu AUTO cục bộ trên ESP32. Các nhận định "chưa có AI quyết định tưới"
+ở phần kiểm tra ban đầu bên dưới là lịch sử trước merge; không còn mô tả code hiện tại.
+Vòng AUTO cho phần cứng thật vẫn chưa được bật hoặc nghiệm thu. Merge này không
+gỡ giới hạn simulator, không bật AUTO và không điều khiển phần cứng.
+Kiểm tra lại sau merge: backend **109 passed**, frontend **20 passed** và production
+build qua, native firmware **95 kiểm tra qua**; editor không báo lỗi. Không chạy
+lại E2E PostgreSQL/MQTT hoặc gọi model Kaggle thật trong phiên merge này.
+
 **Cập nhật theo yêu cầu dùng Arduino IDE:** đã bỏ cấu hình PlatformIO khỏi project;
 entrypoint hiện là [SmartGarden.ino](../firmware/SmartGarden/SmartGarden.ino).
 Watchdog hỗ trợ ESP32 core 3.x đã cài trên máy. Các lệnh build PlatformIO phía dưới

@@ -4,6 +4,13 @@ Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp*
 
 ## Ranh giới xử lý
 
+**Cập nhật triển khai ESP32 (2026-11-01):** yêu cầu phần cứng hiện tại đặt mọi quyết
+định tưới trên AI Server; firmware chỉ đo/thực thi/bảo vệ. Xem
+[báo cáo tích hợp](FIRMWARE_INTEGRATION.md) và [README firmware](../firmware/README.md).
+Firmware mới dùng các schema v1 dưới đây, giới hạn ON cục bộ 60 giây và không thêm
+lệnh AUTO. AI irrigation model/contract chưa có trong repo; chatbot hiện vẫn chỉ tư vấn.
+Các phần mô tả milestone cũ bên dưới là lịch sử kế hoạch; trạng thái G02 vẫn DRAFT.
+
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
 
 ## Luồng bắt buộc của M1

@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_
 from psycopg.types.json import Jsonb
 
 from . import repository
+from .auth import OperatorDep, SessionDep
 from .chat import clean_reply
 from .schemas import CommandCreate, DEVICE_ID_PATTERN
 
@@ -157,7 +158,7 @@ async def history(conn, device_id):
 
 
 @router.get("/devices/{device_id}/irrigation")
-async def get_profile(device_id: str, request: Request):
+async def get_profile(device_id: str, request: Request, _session: SessionDep):
     async with request.app.state.pool.connection() as conn:
         cursor = await conn.execute("SELECT device_id,enabled,revision,policy,last_status,last_attempt FROM irrigation_profile WHERE device_id=%s", (device_id,))
         row = await cursor.fetchone()
@@ -166,11 +167,17 @@ async def get_profile(device_id: str, request: Request):
 
 
 @router.put("/devices/{device_id}/irrigation")
-async def update_profile(device_id: str, body: ProfileUpdate, request: Request):
+async def update_profile(device_id: str, body: ProfileUpdate, request: Request, session: OperatorDep):
+    # Operator only: enabling AUTO lets the supervisor publish pump_on, and
+    # disabling it publishes pump_off. Anonymous gets 401, a viewer 403.
     import re
     if not re.fullmatch(DEVICE_ID_PATTERN, device_id):
         raise HTTPException(422, "invalid_payload")
     app = request.app
+    if body.enabled and not app.state.settings.chat_api_url:
+        # Without a model every evaluation would fail; refuse instead of arming AUTO.
+        raise HTTPException(503, detail={"code": "chat_unavailable", "reason": "not_configured",
+                                         "message": "Chưa cấu hình CHAT_API_URL nên chưa bật được AUTO."})
     async with device_lock(app.state.pool, device_id) as conn:
         if body.enabled:
             t, s = await snapshot(conn, app, device_id)
@@ -187,7 +194,7 @@ async def update_profile(device_id: str, body: ProfileUpdate, request: Request):
         # authoritative if MQTT is unavailable; do not claim a physical stop.
         if not body.enabled:
             await app.state.issue_irrigation_command(device_id, CommandCreate(action="pump_off"), request)
-    return await get_profile(device_id, request)
+    return await get_profile(device_id, request, session)
 
 
 async def record(conn, device_id, observation, status, reason, proposal=None, reserved=0, command_id=None):

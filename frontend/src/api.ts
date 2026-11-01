@@ -1,3 +1,7 @@
+import { Capacitor } from "@capacitor/core";
+import { resolveApiBaseUrl } from "./apiConfig";
+import { authHeader, clearSession, getSession, type AuthSession, type Role } from "./auth";
+
 export type BackendStatus = "checking" | "online" | "offline";
 export type DatabaseStatus =
   | "checking"
@@ -87,6 +91,11 @@ export interface CommandOut {
   late_ack_at: string | null;
 }
 
+export interface ControlAccess {
+  commands_allowed: boolean;
+  reason: string | null;
+}
+
 export interface CommandListResponse {
   device_id: string;
   count: number;
@@ -99,6 +108,7 @@ export interface ApiErrorDetail {
   fields?: string[];
   limit_seconds?: number;
   command_id?: string;
+  retry_after_seconds?: number;
 }
 
 export class ApiError extends Error {
@@ -106,6 +116,7 @@ export class ApiError extends Error {
   status: number;
   fields?: string[];
   limitSeconds?: number;
+  retryAfterSeconds?: number;
 
   constructor(status: number, detail: ApiErrorDetail) {
     super(detail.message || detail.code);
@@ -114,14 +125,52 @@ export class ApiError extends Error {
     this.code = detail.code;
     this.fields = detail.fields;
     this.limitSeconds = detail.limit_seconds;
+    this.retryAfterSeconds = detail.retry_after_seconds;
   }
 }
 
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim() || "/api";
-const apiBaseUrl = configuredBaseUrl.replace(/\/$/, "");
+const apiBaseUrl = resolveApiBaseUrl(
+  import.meta.env, window.location.protocol, Capacitor.isNativePlatform(),
+);
+
+/**
+ * A 401 for the token that is still current means the server no longer accepts
+ * this session (expired, logged out elsewhere, revoked): drop it so the UI
+ * returns to the login screen. A late 401 for an older token is ignored.
+ */
+function noteUnauthorized(response: Response, token: string | undefined): void {
+  if (response.status === 401 && token !== undefined && getSession()?.token === token) {
+    clearSession("unauthorized");
+  }
+}
+
+async function apiFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  { handleUnauthorized = true }: { handleUnauthorized?: boolean } = {},
+): Promise<Response> {
+  const token = getSession()?.token;
+  const headers = { ...(init.headers as Record<string, string> | undefined), ...authHeader() };
+  const controller = new AbortController();
+  const externalSignal = init.signal;
+  const abort = () => controller.abort();
+  if (externalSignal?.aborted) abort();
+  externalSignal?.addEventListener("abort", abort, { once: true });
+  const timeout = window.setTimeout(abort, 10000);
+  try {
+    // No automatic POST retry: an interrupted response may already have published ON.
+    const response = await fetch(input, { ...init, headers, signal: controller.signal });
+    if (handleUnauthorized) noteUnauthorized(response, token);
+    return response;
+  } finally {
+    window.clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abort);
+  }
+}
 
 export async function irrigationRequest<T>(deviceId: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  return handleResponse<T>(await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/irrigation`, {
+  // apiFetch adds the Bearer token, the 10 s timeout and the 401 handling; PUT is never retried.
+  return handleResponse<T>(await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/irrigation`, {
     method: body === undefined ? "GET" : "PUT", signal,
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -180,10 +229,11 @@ export async function sendChat(
   }, 145000);
   signal?.addEventListener("abort", abort, { once: true });
   if (signal?.aborted) controller.abort();
+  const token = getSession()?.token;
   try {
     const response = await fetch(`${apiBaseUrl}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...authHeader() },
       body: JSON.stringify({
         message,
         history,
@@ -192,6 +242,7 @@ export async function sendChat(
       }),
       signal: controller.signal,
     });
+    noteUnauthorized(response, token);
     const result = await handleResponse<ChatReply>(response);
     if (!isRecord(result) || typeof result.reply !== "string" || !result.reply.trim() || !isRecord(result.context)) {
       throw new Error("Trợ lý chưa trả về câu trả lời hợp lệ. Bạn thử lại nhé.");
@@ -251,7 +302,7 @@ export async function fetchSystemStatus(
 
 async function checkBackend(signal?: AbortSignal): Promise<BackendStatus> {
   try {
-    const response = await fetch(`${apiBaseUrl}/health`, {
+    const response = await apiFetch(`${apiBaseUrl}/health`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -270,7 +321,7 @@ async function checkBackend(signal?: AbortSignal): Promise<BackendStatus> {
 
 async function checkDatabase(signal?: AbortSignal): Promise<DatabaseStatus> {
   try {
-    const response = await fetch(`${apiBaseUrl}/ready`, {
+    const response = await apiFetch(`${apiBaseUrl}/ready`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -302,7 +353,7 @@ export async function fetchLatestTelemetry(
   signal?: AbortSignal,
 ): Promise<TelemetryData | null> {
   try {
-    const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/latest`, {
+    const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/latest`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -329,7 +380,7 @@ export async function fetchTelemetryHistory(
 ): Promise<TelemetryData[]> {
   try {
     const url = `${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/telemetry?limit=${limit}&order=${order}`;
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -354,7 +405,7 @@ export async function fetchDeviceState(
   signal?: AbortSignal,
 ): Promise<DeviceStateData | null> {
   try {
-    const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/state`, {
+    const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/state`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -384,7 +435,7 @@ export async function sendCommand(
     body.duration_seconds = durationSeconds;
   }
 
-  const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands`, {
+  const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -401,7 +452,7 @@ export async function fetchCommand(
   commandId: string,
   signal?: AbortSignal,
 ): Promise<CommandOut> {
-  const response = await fetch(`${apiBaseUrl}/commands/${encodeURIComponent(commandId)}`, {
+  const response = await apiFetch(`${apiBaseUrl}/commands/${encodeURIComponent(commandId)}`, {
     signal,
     cache: "no-store",
     headers: { Accept: "application/json" },
@@ -416,7 +467,7 @@ export async function fetchRecentCommands(
   signal?: AbortSignal,
 ): Promise<CommandOut[]> {
   try {
-    const response = await fetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands?limit=${limit}`, {
+    const response = await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/commands?limit=${limit}`, {
       signal,
       cache: "no-store",
       headers: { Accept: "application/json" },
@@ -434,4 +485,72 @@ export async function fetchRecentCommands(
     }
     throw error;
   }
+}
+
+/** Parse /control-access strictly; anything unexpected is "not verified". */
+export function parseControlAccess(body: unknown): ControlAccess {
+  if (isRecord(body) && body.commands_allowed === true && body.reason === null) {
+    return { commands_allowed: true, reason: null };
+  }
+  // Denial is the safe direction, so a refusal with any reason still locks.
+  if (isRecord(body) && body.commands_allowed === false) {
+    return { commands_allowed: false, reason: typeof body.reason === "string" ? body.reason : null };
+  }
+  throw new Error("Phản hồi quyền điều khiển không hợp lệ.");
+}
+
+/**
+ * Ask the backend whether this client may send pump commands.
+ *
+ * Throws on network errors, timeouts, non-2xx and invalid payloads so the UI
+ * keeps control locked. This is only UX: the backend enforces access itself.
+ */
+export async function fetchControlAccess(signal?: AbortSignal): Promise<ControlAccess> {
+  const response = await apiFetch(`${apiBaseUrl}/control-access`, {
+    signal,
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  return parseControlAccess(await handleResponse<unknown>(response));
+}
+
+/** Log in; the password is sent once and never kept. */
+export async function login(username: string, password: string): Promise<AuthSession> {
+  const response = await apiFetch(`${apiBaseUrl}/auth/login`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const body = await handleResponse<unknown>(response);
+  const user = isRecord(body) && isRecord(body.user) ? body.user : null;
+  const role = user?.role;
+  const expiresAt = isRecord(body) && typeof body.expires_at === "string" ? Date.parse(body.expires_at) : NaN;
+  if (
+    !isRecord(body) || typeof body.access_token !== "string" || body.access_token.length < 20
+    || !user || typeof user.username !== "string" || (role !== "operator" && role !== "viewer")
+    || !Number.isFinite(expiresAt)
+  ) {
+    throw new Error("Phản hồi đăng nhập không hợp lệ.");
+  }
+  return { token: body.access_token, username: user.username, role: role as Role, expiresAt };
+}
+
+/**
+ * Ask the server to revoke the current token. Never retried.
+ *
+ * Resolves only when the server answered: 200 (revoked now) or 401 (the token
+ * was already invalid there). Throws on network errors, the 10 s timeout and
+ * other statuses, in which case revocation is NOT confirmed.
+ */
+export async function logout(): Promise<"revoked" | "already_invalid"> {
+  const response = await apiFetch(
+    `${apiBaseUrl}/auth/logout`,
+    { method: "POST", cache: "no-store", headers: { Accept: "application/json" } },
+    // The caller decides how the session ends; a 401 here is not "expired".
+    { handleUnauthorized: false },
+  );
+  if (response.status === 401) return "already_invalid";
+  await handleResponse<unknown>(response);
+  return "revoked";
 }

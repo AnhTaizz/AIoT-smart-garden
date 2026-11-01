@@ -8,7 +8,7 @@ Snapshot giao diện đính kèm không được sửa; source thay đổi nằm
 
 - Supervisor cho phép số đo thật khi ID nằm trong `IRRIGATION_REAL_DEVICE_IDS`,
   có cấu hình credential broker, sensor OK, UTC/boot/state hợp lệ.
-- `node_01` trong mẫu cấu hình server là ESP32 thật; simulator phải dùng ID khác.
+- Khi `node_01` được đặt trong `IRRIGATION_REAL_DEVICE_IDS`, nó là ESP32 thật; simulator phải dùng ID khác.
   Dữ liệu simulator dùng chung ID đã được chỉ định thật bị chặn cả trước và sau gọi AI.
 - Giao diện đọc `execution_scope` từ server, hiển thị **ESP32 THẬT**, có nút
   **Bật AUTO (ESP32 thật)**; không tự bật AUTO khi mở trang hay khi nhận telemetry.
@@ -18,7 +18,8 @@ Snapshot giao diện đính kèm không được sửa; source thay đổi nằm
 ## Cấu hình server
 
 1. Tạo `.env` từ [.env.example](../.env.example) nếu chưa có; giữ
-   `IRRIGATION_REAL_DEVICE_IDS=node_01`. Có thể để rỗng để khóa lại AUTO phần cứng.
+   đặt `IRRIGATION_REAL_DEVICE_IDS=node_01` chỉ cho phiên thử có giám sát (mẫu để rỗng = AUTO phần cứng khóa).
+   Trước khi đặt, tắt simulator đang dùng `node_01`.
 2. Chuẩn bị Mosquitto private và hai account theo [README firmware](../firmware/README.md#broker-riêng-có-xác-thực):
    backend `garden_backend`, board `esp32_node_01`, password riêng và ACL. Điền
    `MQTT_USERNAME`/`MQTT_PASSWORD` backend vào `.env`; không gửi password vào chat/Git.

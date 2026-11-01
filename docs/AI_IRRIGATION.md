@@ -42,6 +42,7 @@ nghiệm thu tích hợp trên board thật, hiệu chuẩn cảm biến hoặc 
 
 ## API và dữ liệu
 
+Từ bản tích hợp BC-02, `GET` cần phiên đăng nhập và `PUT` cần role `operator` (anonymous `401`, viewer `403`); dashboard gửi Bearer token qua `apiFetch`. Bật AUTO khi chưa cấu hình `CHAT_API_URL` trả `503 chat_unavailable` (`reason: not_configured`).
 `GET /devices/{id}/irrigation` trả profile và 20 quyết định gần nhất, gồm command status/ACK/relay xác nhận.
 Trường `execution_scope` hiện có thêm giá trị `real_device` khi ID nằm trong cấu hình
 thiết bị thật; còn lại là `simulator_only`. Đây là mở rộng enum của response REST;
@@ -49,13 +50,15 @@ frontend đã cập nhật tương ứng và không cho bật nếu phạm vi ch
 `PUT` giữ nguyên body `{enabled, policy}`; không thêm trường MQTT hoặc bảng DB.
 Tắt lưu chế độ trước rồi yêu cầu STOP.
 
-Migration `004_irrigation.sql` thêm profile/lease và nhật ký quyết định. Nhật ký lưu snapshot, policy, prompt version, phản hồi model tối đa 4.000 ký tự, đề xuất, lý do chặn, ngân sách và command ID. `sent` không có nghĩa `applied`; ACK cũng không chứng minh có nước chảy. Ngân sách chỉ tính AUTO; ON bằng tay vẫn cập nhật mốc nghỉ nếu đã có profile.
+Migration `004_irrigation.sql` thêm profile/lease và nhật ký quyết định. Số `004` trùng với `004_auth_sessions.sql` của BC-02; runner lưu theo tên file nên cả hai đều chạy (thứ tự tên: auth trước, irrigation sau, không phụ thuộc nhau). Không đổi tên file đã chia sẻ; migration mới tiếp theo dùng `005_`. Nhật ký lưu snapshot, policy, prompt version, phản hồi model tối đa 4.000 ký tự, đề xuất, lý do chặn, ngân sách và command ID. `sent` không có nghĩa `applied`; ACK cũng không chứng minh có nước chảy. Ngân sách chỉ tính AUTO; ON bằng tay vẫn cập nhật mốc nghỉ nếu đã có profile.
 
 MQTT command/ACK/state, GPIO và migration hiện có được giữ nguyên. Thông số cây,
 hiệu chuẩn probe và lưu lượng bơm thật phải được người vận hành đo/kiểm tra trước
 khi bật AUTO. Không tự điền ngưỡng nông học hay coi preset simulator là khuyến nghị.
 
 ## Kiểm thử
+
+Bản tích hợp `integration/smart-garden-unified-20261101` (2026-11-01): backend unit + E2E 239 pass, 2 skip (live Kaggle); gồm 8 ca supervisor và các ca mới anonymous 401 / viewer 403 / AUTO không có `CHAT_API_URL` → 503. Số liệu dưới đây là của PR #9 trên `main` trước BC-02.
 
 Bản mở hỗ trợ ESP32 thật được kiểm tra bằng test trong process với dữ liệu và AI,
 storage, command I/O giả lập có kiểm soát; không gửi MQTT hoặc cấp điện bơm thật.

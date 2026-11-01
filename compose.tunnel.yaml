@@ -1,0 +1,21 @@
+# Optional connector for the existing remotely-managed Named Tunnel `garden-local`.
+# Apply after compose.yaml (and compose.device.yaml when ESP32 uses LAN MQTT).
+# Public hostnames/routes are configured in the Cloudflare dashboard, not here:
+#   garden.anhtaizz.id.vn      -> http://frontend:80
+#   garden-api.anhtaizz.id.vn  -> http://backend:8000
+#   anhtaizz.id.vn (optional)  -> http://frontend:80
+# Joining the Compose network keeps those origins resolvable after `down`/`up`.
+# Stop any manually started connector for the same tunnel before using this.
+# Never route MQTT or PostgreSQL through this tunnel.
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.4
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env (garden-local tunnel only)}
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy

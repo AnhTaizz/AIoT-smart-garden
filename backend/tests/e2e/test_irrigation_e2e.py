@@ -10,6 +10,9 @@ import httpx
 import pytest
 from psycopg.types.json import Jsonb
 
+from datetime import datetime, timedelta, timezone
+
+from app.auth import Session
 from app.config import Settings
 from app.db import create_pool
 from app.irrigation import evaluate, Policy
@@ -21,11 +24,14 @@ from helpers import API, FakeDevice, MQTT_HOST, MQTT_PORT
 
 pytestmark = pytest.mark.skipif(not API, reason="Requires running Compose stack")
 
+# create_command is called in-process here, so its OperatorDep is passed explicitly.
+OPERATOR = Session("e2e-operator", "operator", datetime.now(timezone.utc) + timedelta(hours=1), b"\0" * 32)
+
 
 @pytest.mark.parametrize("scenario", ["water", "no_water", "invalid", "cooldown", "over_limit", "manual_race", "command_timeout", "lease_expired"])
 def test_supervisor_closes_the_loop(scenario):
     async def run():
-        settings = replace(Settings.from_env(), mqtt_host=MQTT_HOST, mqtt_port=MQTT_PORT, mqtt_client_id="auto_test_" + uuid4().hex[:8])
+        settings = replace(Settings.from_env(), mqtt_host=MQTT_HOST, mqtt_port=MQTT_PORT, mqtt_client_id="auto_test_" + uuid4().hex[:8], chat_api_url="http://ai.test/decide")
         pool = create_pool(settings)
         await pool.open(wait=True)
         bridge = MqttBridge(settings, asyncio.get_running_loop(), asyncio.Queue(maxsize=100))
@@ -51,7 +57,7 @@ def test_supervisor_closes_the_loop(scenario):
 
                 async def reply(_request):
                     if scenario == "manual_race":
-                        await create_command(device.device_id, CommandCreate(action="pump_off"), request)
+                        await create_command(device.device_id, CommandCreate(action="pump_off"), request, OPERATOR)
                     if scenario == "lease_expired":
                         async with pool.connection() as conn:
                             await conn.execute("UPDATE irrigation_profile SET lease_until=now()-interval '1 second' WHERE device_id=%s", (device.device_id,))

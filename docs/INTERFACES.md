@@ -1,26 +1,22 @@
-# Thỏa thuận giao tiếp — Bản nháp cho G02
+# Thỏa thuận giao tiếp — G02 AGREED
 
-Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp**. Bản đề xuất cụ thể để chốt nằm ở mục [Bản đề xuất v1 của Tài (B)](#bản-đề-xuất-v1-của-tài-b--chờ-nhóm-chốt-ở-g02) cuối file. Tiêu chí nghiệm thu M1 đã được thống nhất trong kế hoạch, nhưng schema payload, response body, QoS/retained và xử lý lỗi vẫn chưa phải contract AGREED. Tài (B) chủ trì, Thành (A) và Toản (C) cùng kiểm tra. Chỉ đổi trạng thái sau khi có ví dụ hợp lệ/lỗi, ngày xác nhận và PR. Implementation tham chiếu trên draft PR #2 đã được kiểm tra tại `6ba6eb46`; xem [bản ghi regression và bàn giao](PR2_TEST_HANDOFF_2026-09-26.md). Bằng chứng này không thay cho xác nhận G02 hoặc nghiệm thu M1.
+Trạng thái: **AGREED — Thành (A), Tài (B), Toản (C) xác nhận ngày 2026-09-29**. Contract v1 nằm ở mục [Contract v1 đã thống nhất](#contract-v1-đã-thống-nhất) cuối file. Schema/payload/QoS/error rules đã được implement trong backend/simulator và PR #2 đã merge vào `main`; audit 2026-09-29 có backend 84/84 và simulator 31/31 tests pass. M1 Web/LAN cũng đã được nhóm nghiệm thu riêng; lịch sử regression nằm trong [PR2 test handoff](PR2_TEST_HANDOFF_2026-09-26.md).
 
 ## Ranh giới xử lý
 
-**Cập nhật triển khai ESP32 (2026-11-01):** yêu cầu phần cứng hiện tại đặt mọi quyết
-định tưới trên AI Server; firmware chỉ đo/thực thi/bảo vệ. Xem
-[báo cáo tích hợp](FIRMWARE_INTEGRATION.md) và [README firmware](../firmware/README.md).
-Firmware mới dùng các schema v1 dưới đây, giới hạn ON cục bộ 60 giây và không thêm
-lệnh AUTO. Supervisor AI tưới hỗ trợ ESP32 thật khi device ID được cấp quyền trong
-`IRRIGATION_REAL_DEVICE_IDS`, có credential MQTT, cảm biến/giờ/state hợp lệ. Các ID
-khác vẫn chỉ được dùng simulator; không dùng hai nguồn cùng ID. Chatbot chỉ tư vấn.
-Các phần mô tả milestone cũ bên dưới là lịch sử kế hoạch; trạng thái G02 vẫn DRAFT.
+**Cập nhật triển khai ESP32 (2026-11-01):** firmware Arduino IDE trong
+[firmware/SmartGarden](../firmware/README.md) dùng đúng các schema v1 dưới đây, giới hạn
+ON cục bộ 60 giây (API vẫn cho phép tới 120; board từ chối `>60` bằng `invalid_duration`),
+mặc định dry-run/control-disabled và **không có** chế độ AUTO. Xem
+[báo cáo tích hợp firmware](FIRMWARE_INTEGRATION.md).
 
-Cập nhật theo yêu cầu mới: [supervisor AI tưới](AI_IRRIGATION.md), API GET/PUT
-`/devices/{id}/irrigation` và nhật ký quyết định giữ nguyên. Response REST
-`execution_scope` mở rộng từ `simulator_only` thêm `real_device`; frontend cùng
-repo đã cập nhật, body PUT không đổi. Không thêm trường MQTT/schema/bảng DB.
-AUTO vẫn phải bật chủ động, tắt sau backend restart và không chạy đồng thời với
-AUTO cục bộ. Xem [quy trình ESP32 thật](ESP32_REAL_SETUP.md); G02 vẫn DRAFT.
+**Supervisor tưới AI phía server (PR #9 + PR #10, đã merge vào `main` 2026-11-01):** xem [AI_IRRIGATION](AI_IRRIGATION.md) và [quy trình ESP32 thật](ESP32_REAL_SETUP.md). Backend tự đánh giá theo chu kỳ, gọi model, validate JSON và có thể phát `pump_on` qua đúng đường command/ACK/state G02 (cùng `command_id`, QoS 1, không retained). Mặc định chỉ simulator (`simulated: true`). Một ESP32 thật chỉ được AUTO khi **đồng thời**: device ID nằm trong `IRRIGATION_REAL_DEVICE_IDS` (Compose mặc định rỗng = khóa), backend có `MQTT_USERNAME`/`MQTT_PASSWORD` (`compose.secure.yaml`), telemetry `simulated: false` với `measured_at`/`reported_at` còn mới và cảm biến trong miền hợp lệ. Response `execution_scope` có thêm `real_device` (mở rộng enum REST; body PUT không đổi; không thêm trường MQTT/bảng DB). AUTO phải bật chủ động, tự tắt sau backend restart, lỗi AI/API hoặc lệnh tay. REST `GET /devices/{id}/irrigation` cần phiên; `PUT` cần `operator` (anonymous `401`, viewer `403`); chưa có `CHAT_API_URL` thì `503 not_configured`. Chatbot `/chat` vẫn chỉ tư vấn.
+
+**Kiến trúc Auto — cần ghi quyết định chính thức (cập nhật 2026-11-01):** với PR #10, `main` đã đi theo hướng **server quyết định tưới**, ESP32 chỉ đo/thực thi/bảo vệ (firmware không có AUTO, giữ giới hạn 60 giây và OFF cục bộ). Hướng này trái với đoạn ngay dưới, với CLAUDE.md §3 ("ESP32 sở hữu Manual/Auto; backend không tạo bộ logic tự tưới thứ hai") và với kế hoạch [W3](W3_WEATHER_LOCAL_EXECUTION_PLAN.md) (weather chỉ hoãn Auto trên firmware). Thành, Tài và Toản cần ghi quyết định (ngày, người xác nhận) rồi sửa CLAUDE.md §3, đoạn dưới và W3 cho nhất quán. Cho tới lúc đó, `IRRIGATION_REAL_DEVICE_IDS` để rỗng trên stack demo; chỉ bật cho phiên thử có giám sát theo [ESP32_REAL_SETUP](ESP32_REAL_SETUP.md), adapter bơm rút trước khi kiểm tra OFF.
 
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
+
+Frontend hiện hành là một codebase ReactJS cho Web + Capacitor Android/iOS. Quyết định 2026-10-06: Web dùng HTTPS frontend tunnel và `/api`; Capacitor dùng HTTPS backend tunnel trực tiếp qua env. User không còn phụ thuộc LAN; ESP32 -> Mosquitto vẫn có thể dùng LAN. Frontend không publish/subscribe MQTT trực tiếp. WebSocket chưa implement, behavior hiện tại là REST polling. MQTT/API contract dưới đây không đổi; phone/iOS runtime chỉ được coi verified khi có bằng chứng riêng.
 
 ## Luồng bắt buộc của M1
 
@@ -36,9 +32,9 @@ Hai luồng phải chạy trên cùng phiên bản và cùng `device_id`. Kiểm
 
 ## MQTT cho M1
 
-Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống nhất trong M1, còn chi tiết payload phải được cả 3 thành viên (Thành, Tài, Toản) xác nhận ở G02:
+Giữ bốn topic hiện tại cho `node_01`; topic path và chi tiết payload đã được cả 3 thành viên (Thành, Tài, Toản) xác nhận ở G02:
 
-| Luồng | Topic M1 | Nội dung tối thiểu cần xác nhận |
+| Luồng | Topic M1 | Nội dung G02 đã xác nhận |
 | --- | --- | --- |
 | Telemetry | garden/node_01/telemetry | device_id, boot_id/sequence nếu khử trùng, thời gian đo, giá trị/đơn vị, sensor_status, mode, relay_state |
 | Command | garden/node_01/control | command_id, hành động, tham số, thời hạn; quy tắc kiểm tra tính hợp lệ |
@@ -47,7 +43,7 @@ Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống 
 
 - Chốt QoS và retained cho từng topic. Không giữ retained lệnh bật bơm để thiết bị chạy lại lệnh cũ khi kết nối.
 - Lệnh có ID để nhận biết trùng; nhận lại cùng ID không kéo dài giới hạn chạy. Chốt cửa sổ lưu ID và hành vi qua khởi động lại.
-- Chốt cách từ chối lệnh hết hạn và xử lý khi đồng hồ thiết bị chưa đồng bộ. TTL không thay thế giới hạn thời gian chạy cục bộ.
+- Dùng `expires_at` tuyệt đối để từ chối lệnh hết hạn và xử lý khi đồng hồ thiết bị chưa đồng bộ; không dùng TTL tương đối. Hạn command không thay thế giới hạn thời gian chạy cục bộ.
 - Backend/UI phân biệt yêu cầu đã gửi, thiết bị chấp nhận và trạng thái được áp dụng. ACK không chứng minh có dòng nước thật.
 - Chốt ngưỡng xác định dữ liệu cũ/offline, cách lưu bản tin tới trễ và thứ tự bản tin.
 
@@ -57,13 +53,13 @@ Giữ bốn topic hiện tại cho `node_01`; topic path được dùng thống 
 2. HTTP 2xx chỉ có nghĩa backend đã nhận request; frontend tiếp tục hiển thị `pending`, không báo thiết bị đã thực hiện.
 3. Simulator nhận command và gửi ACK có cùng `command_id`. ACK `accepted` vẫn là trạng thái chờ; ACK `rejected` chuyển backend sang `rejected` và giữ lý do.
 4. Khi áp dụng lệnh, simulator gửi ACK `applied` và state có `last_command_id` tương ứng cùng trạng thái thực tế. Backend chỉ chuyển sang `applied` khi thông tin nhận được khớp command.
-5. Nếu không có kết quả cuối trong thời hạn đã chốt, backend chuyển sang `timeout`. ACK tới trễ phải được ghi nhận nhưng không được làm UI âm thầm báo thành công; cách hòa giải chi tiết chốt ở G02.
+5. Nếu không có kết quả cuối trong thời hạn đã chốt, backend chuyển sang `timeout`. ACK tới trễ phải được ghi nhận nhưng không được làm UI âm thầm báo thành công; cách hòa giải chi tiết tuân theo contract G02 bên dưới.
 
 Backend và API phục vụ UI phải phân biệt tối thiểu bốn trạng thái `pending`, `applied`, `rejected`, `timeout`. Frontend hiển thị trạng thái backend trả về, không suy luận thành công từ mã HTTP của request tạo command.
 
 ## Dữ liệu và điều khiển
 
-| Nội dung | Quyết định cần điền ở G02 |
+| Nội dung | Quyết định G02 |
 | --- | --- |
 | Thời gian | Chọn chuẩn UTC, độ chính xác, thời điểm nhận ở server và cách xử lý thời gian đo chưa hợp lệ |
 | Đơn vị | Nhiệt độ °C, độ ẩm không khí %, đất là % tương đối sau hiệu chuẩn; giữ ADC phục vụ đánh giá khi cần |
@@ -100,9 +96,9 @@ Tuần 1 dùng polling đơn giản hoặc cơ chế nhóm quen thuộc; chốt 
 
 Toản (C) bàn giao Tài (B): artifact model, preprocessing, danh sách nhãn, inference mẫu, phiên bản dataset/model, dependency, kích thước ảnh và lỗi đầu vào. Tài trả kết quả gắn image_id và model_version. HSV trả độ phủ xanh riêng; model phân loại trả nhãn/điểm mô hình riêng. Không tự gọi điểm mô hình là xác suất đã hiệu chuẩn.
 
-## Bản đề xuất v1 của Tài (B) — chờ nhóm chốt ở G02
+## Contract v1 đã thống nhất
 
-Trạng thái mục này: **DRAFT**. Backend và simulator trong nhánh `feat/B-W1-backend-telemetry-command` đã triển khai đúng các quy tắc dưới đây để nhóm có thứ cụ thể kiểm tra, nhưng chưa ai xác nhận. Thành (A) xem phần thiết bị, Toản (C) xem phần REST/UI; mọi thay đổi phải sửa cả mục này và code trong cùng PR.
+Trạng thái mục này: **AGREED** ngày 2026-09-29. Backend và simulator trong nhánh lịch sử `feat/B-W1-backend-telemetry-command` đã triển khai các quy tắc dưới đây; Thành (A) đã xác nhận phần thiết bị, Toản (C) phần REST/UI và Tài (B) phần backend. Mọi thay đổi sau mốc này phải được nhóm thống nhất và sửa cả mục này lẫn code liên quan trong cùng PR.
 
 ### 1. Quy ước chung
 
@@ -350,7 +346,7 @@ Tiền tố cho biết bên nào phát ra, để UI không nói "thiết bị t�
 
 ### 9. REST
 
-Backend chỉ phục vụ qua cùng origin dashboard `/api`. Mọi lỗi dùng chung một dạng thân phản hồi, kể cả 422:
+Web phục vụ qua cùng origin dashboard `/api`. App Android (Capacitor, BC-01) gọi trực tiếp origin HTTPS của FastAPI, không có tiền tố `/api`; trình duyệt chỉ được đọc phản hồi khác origin nếu origin nằm trong `CORS_ORIGINS` (CORS không phải xác thực; `Authorization` nằm trong danh sách header được phép). Mọi lỗi dùng chung một dạng thân phản hồi, kể cả 422:
 
 ```json
 {"detail": {"code": "no_telemetry", "message": "Thiết bị chưa có telemetry nào được lưu."}}
@@ -547,7 +543,39 @@ Backend chọn `limit` bản ghi **mới nhất** theo `received_at` trong kho�
 | Publish thất bại sau khi đã tạo command | 503 | `backend_publish_failed`, command thành `rejected` với `reason: "backend:publish_failed"` |
 | PostgreSQL không dùng được | 503 | `database_unavailable` |
 
-UI hiển thị 404 `no_telemetry`/`no_state` là trạng thái rỗng ("chưa có dữ liệu"), không phải lỗi hệ thống.
+UI hiển thị 404 `no_telemetry`/`no_state` là trạng thái rỗng ("chưa có dữ liệu"), không phải lỗi hệ thống. Các mã 5xx hoặc mất kết nối là lỗi API và phải hiển thị khác trạng thái rỗng.
+
+**Xác thực REST — đề xuất BC-02 (chưa được nhóm xác nhận; thay đổi không tương thích ngược với client chưa đăng nhập):**
+
+Mọi endpoint dữ liệu, lịch sử, lệnh, `/control-access`, `/auth/me`, `/auth/logout` và `/chat` yêu cầu header `Authorization: Bearer <access_token>`. Chỉ `GET /health`, `GET /ready` và `POST /auth/login` là public (`/openapi.json`, `/docs` không chứa dữ liệu vườn). IP, header Cloudflare/`X-Forwarded-*` và CORS không được dùng làm bằng chứng xác thực. MQTT topic/payload, QoS và vòng đời command G02 **không đổi**.
+
+`POST /auth/login` với `{"username": "...", "password": "..."}` → `200`:
+
+```json
+{
+  "access_token": "<chuỗi ngẫu nhiên, opaque>",
+  "token_type": "bearer",
+  "expires_at": "2026-10-30T20:00:00.000000Z",
+  "user": {"username": "operator", "role": "operator"}
+}
+```
+
+`GET /auth/me` → `200 {"user": {"username", "role"}, "expires_at"}`. `POST /auth/logout` → `200 {"status": "logged_out"}`; token bị thu hồi ngay ở server. Client chỉ được báo "đã thu hồi ở máy chủ" khi nhận 200 (hoặc 401: token đã không còn hiệu lực); lỗi mạng/timeout/5xx nghĩa là chưa xác nhận thu hồi. `GET /control-access` → `200 {"commands_allowed": true, "reason": null, "role": "operator"}` hoặc `{"commands_allowed": false, "reason": "forbidden", "role": "viewer"}`. UI chỉ mở nút khi nhận đúng `commands_allowed: true`; backend vẫn tự kiểm tra ở mọi `POST /devices/{id}/commands`.
+
+| Tình huống | Mã HTTP | `code` |
+| --- | --- | --- |
+| Thiếu/sai dạng header Bearer | 401 (`WWW-Authenticate: Bearer`) | `auth_required` |
+| Token không tồn tại, hết hạn, đã logout hoặc tài khoản cấu hình đã đổi | 401 | `invalid_session` |
+| Sai tên đăng nhập/mật khẩu | 401 | `invalid_credentials` |
+| Backend chưa cấu hình tài khoản hợp lệ (fail closed) | 503 | `auth_not_configured` |
+| Tài khoản `viewer` gửi lệnh | 403 | `forbidden` |
+| Đăng nhập sai quá `LOGIN_MAX_FAILURES` lần trong `LOGIN_FAILURE_WINDOW_SECONDS` | 429 + `Retry-After` | `login_rate_limited` |
+| `/chat` quá `CHAT_RATE_LIMIT` lượt/cửa sổ cho mỗi tài khoản | 429 + `Retry-After` | `chat_request_rate_limited` |
+| Quá `LOGIN_MAX_CONCURRENT` phép kiểm tra mật khẩu đang chạy (BC-02.1) | 429 + `Retry-After: 2` | `login_busy` |
+| `pump_on` quá `PUMP_ON_RATE_LIMIT` lượt/cửa sổ cho mỗi thiết bị (`pump_off` không bị giới hạn này nhưng vẫn có thể lỗi 503 khi broker/DB lỗi) | 429 + `Retry-After` | `command_rate_limited` |
+| `CHAT_API_URL` chưa cấu hình | 503 | `chat_unavailable`, `reason: "not_configured"` |
+
+Thứ tự kiểm tra ở `POST /devices/{id}/commands`: xác thực (401) → quyền (403) → kiểm tra thời lượng (422) → broker (503) → giới hạn `pump_on` (429) → tạo command và publish. Request bị chặn ở các bước trước không tạo bản ghi command và không publish MQTT. Thân 429 có thêm `retry_after_seconds`. Mục `remote_control_disabled` của BC-01 đã bị thay bằng kiểm tra phiên/role.
 
 ### 10. Tham số thời gian của M1
 
@@ -573,7 +601,7 @@ Vì `pump_on` chỉ được thực thi khi thiết bị kiểm tra được `ex
 
 Phân trang bằng con trỏ cho history; AUTO và API cấu hình (M3); khử trùng theo thời gian đến trễ; xác thực API/MQTT; ảnh và inference (M4); WebSocket nếu polling thực sự không đủ.
 
-### 13. Điều kiện để đổi mục này thành AGREED
+### 13. Bằng chứng G02 AGREED
 
 | Điều kiện | Trạng thái |
 | --- | --- |
@@ -582,13 +610,25 @@ Phân trang bằng con trỏ cho history; AUTO và API cấu hình (M3); khử t
 | Thứ tự kiểm tra của thiết bị và quy tắc backend | có |
 | Bảng reason ghi rõ bên phát | có |
 | Sáu endpoint REST kèm mẫu response và bảng mã lỗi | có |
-| Thành (A) xác nhận thiết bị/firmware làm được | **chưa** |
-| Toản (C) xác nhận REST/UI đủ dữ liệu | **chưa** |
-| Tài (B) xác nhận backend đúng bản này | **chưa** |
-| Ghi tên, ngày và link PR ở mục Xác nhận; đổi DRAFT → AGREED trong PR có cả ba approve | **chưa** |
+| Thành (A) xác nhận thiết bị/firmware làm được | **có** |
+| Toản (C) xác nhận REST/UI đủ dữ liệu | **có** |
+| Tài (B) xác nhận backend đúng bản này | **có** |
+| Ghi tên và ngày ở mục Xác nhận; đổi DRAFT → AGREED | **có** |
 
-G02 AGREED là điều kiện đi trước và **không** đồng nghĩa M1 PASS. M1 PASS vẫn theo đúng checklist trong [ROADMAP](ROADMAP.md): cần một phiên end-to-end có telemetry lên UI, command quay về thiết bị, và điện thoại thật mở dashboard qua IP LAN.
+G02 AGREED và M1 PASS là hai quyết định riêng. Ngày 2026-09-29, nhóm đã xác nhận G02 AGREED và nghiệm thu M1 Web/LAN sau phiên end-to-end có telemetry lên UI, command quay về simulator bằng ACK/state, và điện thoại thật mở dashboard qua IP LAN. M1 không phụ thuộc Capacitor; Android packaging thuộc M1.5.
 
 ## Xác nhận
 
-Thành (A): chưa xác nhận. Tài (B): chưa xác nhận. Toản (C): chưa xác nhận. Link PR thống nhất: [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2).
+Thành (A): xác nhận ngày 2026-09-29. Tài (B): xác nhận ngày 2026-09-29. Toản (C): xác nhận ngày 2026-09-29. Implementation reference: [PR #2 — đã merge](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2).
+
+
+## W3 Weather-aware Auto — G02 extension PROPOSED (2026-10-31)
+
+**Trạng thái: PROPOSED, CHƯA AGREED.** Yêu cầu chủ dự án: thêm dự báo mưa vào chế độ Auto trong W3. Thành (A) và Toản (C) phải xác nhận trước khi mở các MQTT topic/payload/config mới; firmware vẫn sở hữu quyền quyết định relay, STOP và giới hạn thời gian.
+
+- Backend B lấy Open-Meteo theo tọa độ cấu hình, cache + timeout, thông tin fetched_at/valid_until và đánh dấu fresh/stale/unavailable/disabled. REST weather read-only cần phiên hợp lệ; đường dẫn/schema chính thức chốt sau review. Không phát MQTT hoặc pump_on trong phase read-only.
+- Advisory dry-run đề xuất: delay/no_delay/unknown; reason + khoảng thời gian dự báo + TTL. Forecast stale hoặc không có dữ liệu không được dùng để hoãn Auto thêm lần mới. Ngưỡng xác suất mưa/lượng mưa/ẩm đất và thời gian hoãn chưa chốt.
+- Chỉ khi G02 review: định nghĩa version/payload/expiry/sequence/target boot, ACK và ưu tiên STOP cho firmware. Advisory **chỉ hoãn**, không tự cho lệnh ON. Mọi tình huống bất thường quay về policy soil-local an toàn được phê duyệt.
+- Kiểm thử: fake weather provider, timeout/429/5xx, null/out-of-order/UTC, stale, Wi-Fi/MQTT disconnect, boot, STOP, relay-safe và E2E simulator trước ESP32 thật. Chưa gọi M3 PASS khi chỉ mô phỏng.
+
+Chi tiết: [W3_WEATHER_LOCAL_EXECUTION_PLAN](W3_WEATHER_LOCAL_EXECUTION_PLAN.md).

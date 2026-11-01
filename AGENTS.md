@@ -1,5 +1,7 @@
 # Smart Garden — Context and guardrails for coding agents
 
+> **Integration note (2026-11-01):** the statement below that "the server runs the AI model and makes irrigation decisions" is **not a team decision yet**. `main` now follows it: PR #9 added the backend supervisor and PR #10 lets it drive a real ESP32 only when the device ID is listed in `IRRIGATION_REAL_DEVICE_IDS` and the broker uses credentials. It still conflicts with `CLAUDE.md` §3 (ESP32 owns Manual/Auto; no second backend auto-watering logic) and with the W3 plan. See `docs/INTERFACES.md` (Ranh giới xử lý). Until Thành, Tài and Toản record the decision, keep `IRRIGATION_REAL_DEVICE_IDS` empty outside supervised sessions and do not add Auto to the firmware.
+
 > Read this file before changing code. This document describes the **real hardware reported and tested by the user**, plus the original firmware files shared in the conversation. **Do not assume that a Wokwi diagram describes physical power wiring.**
 
 ## 1. Goal and architecture

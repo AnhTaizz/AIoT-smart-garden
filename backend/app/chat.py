@@ -17,6 +17,7 @@ from psycopg_pool import PoolTimeout
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from . import repository
+from .auth import SessionDep, limiters, rate_limited
 from .schemas import DEVICE_ID_PATTERN
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "agro_system_v1.md").read_t
     encoding="utf-8"
 )
 CHAT_ERRORS = {
-    "chat_unavailable": "Chưa kết nối được trợ lý AI. Bạn kiểm tra phiên Kaggle và đường dẫn ngrok rồi thử lại nhé.",
+    "chat_unavailable": "Chưa kết nối được trợ lý AI. Bạn kiểm tra phiên Kaggle và CHAT_API_URL rồi thử lại nhé.",
     "chat_timeout": "Model đang phản hồi lâu hơn dự kiến. Bạn thử lại sau nhé.",
     "chat_rate_limited": "Trợ lý AI đang bận hoặc đã chạm giới hạn dịch vụ. Bạn thử lại sau nhé.",
     "chat_invalid_response": "Model chưa trả về câu trả lời hợp lệ. Bạn thử gửi lại nhé.",
@@ -279,10 +280,24 @@ def guard_reply(reply: str, context: GardenContext) -> tuple[str, Literal["model
     return "\n".join(lines), "garden_facts"
 
 
+CHAT_NOT_CONFIGURED = (
+    "Trợ lý AI chưa được cấu hình: backend chưa có CHAT_API_URL tới máy chủ Kaggle."
+)
+
+
 @router.post("/chat", response_model=ChatResponse)
-async def chat(body: ChatRequest, request: Request) -> ChatResponse:
-    context = await load_context(request, body)
+async def chat(body: ChatRequest, request: Request, session: SessionDep) -> ChatResponse:
     settings = request.app.state.settings
+    # Limit per account: every call may cost a slow Kaggle generation.
+    wait = limiters(request).chat.hit(session.username)
+    if wait is not None:
+        raise rate_limited("chat_request_rate_limited", wait)
+    if not settings.chat_api_url:
+        raise HTTPException(
+            503,
+            {"code": "chat_unavailable", "reason": "not_configured", "message": CHAT_NOT_CONFIGURED},
+        )
+    context = await load_context(request, body)
     messages = [
         {
             "role": "system",

@@ -64,6 +64,8 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 
 ### A-W3-01 — Hoàn thiện logic tưới và lỗi
 
+- **Mở rộng đề xuất, cần Thành review:** weather advisory có TTL chỉ được hoãn một chu kỳ Auto, không tự kích ON. ESP32 sở hữu relay, hysteresis, giới hạn thời lượng và STOP. Cần chốt contract G02 trước khi sửa firmware. Xem [kế hoạch W3 local](../W3_WEATHER_LOCAL_EXECUTION_PLAN.md).
+
 - **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** A-W2-02, G02.
 - **Đầu ra:** State machine Manual/Auto, hysteresis, tưới theo nhịp.
@@ -73,6 +75,8 @@ Mục tiêu chung: Manual/Auto, safety, reconnect và error handling.
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### A-W3-02 — Hoàn thiện reconnect và xử lý lỗi thiết bị
+
+- **Mở rộng:** test advisory stale/invalid/duplicate, reboot, sai boot/sequence, mất MQTT/weather; không lặp lại lệnh ON; khi thiếu weather dùng chính sách soil-local an toàn được duyệt, tuyệt đối không để cache cũ hoãn vô hạn.
 
 - **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 3 giờ.
 - **Phụ thuộc:** A-W3-01, A-W2-02, G02.

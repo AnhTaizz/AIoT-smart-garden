@@ -75,14 +75,17 @@ Dịch vụ Kaggle phải trả `{"response":"Nội dung tư vấn..."}`. Đây 
     "captured_at": "2026-10-27T03:00:00Z",
     "telemetry": null,
     "state": null,
+    "weather": null,
     "warnings": []
   },
-  "prompt_version": "smart-garden-agro-v1",
+  "prompt_version": "smart-garden-agro-v2",
   "reply_source": "model"
 }
 ```
 
 Ví dụ response trên ứng với lượt tắt gửi dữ liệu. Khi bật, `status` là `included` nếu có telemetry/state hoặc `unavailable` khi không lấy được. Backend chỉ lấy dữ liệu từ repository; bỏ số đo của cảm biến lỗi, giữ nhãn cũ/mô phỏng, và cung cấp đúng bản chụp đã dùng cho từng câu trả lời trong **Dữ liệu gửi kèm**. Các đơn vị là °C, % không khí và % cảm biến đất; % đất phụ thuộc hiệu chuẩn, không phải mặc định hàm lượng nước thể tích.
+
+Khi bật gửi dữ liệu và backend có dự báo Open-Meteo **fresh** (xem `GET /weather` trong [INTERFACES](INTERFACES.md#w3-weather-aware-auto--g02-extension-proposed-2026-10-31)), `context.weather` chứa tóm tắt mưa 6 giờ tới: `kind: "forecast"`, `provider`, `fetched_at`, `window_start/end`, `max_precipitation_probability_pct` (xác suất cao nhất theo từng giờ, không phải xác suất mưa cả cửa sổ), `total_precipitation_mm`, `hours_in_window`, `hours_with_data`. Nhiệt độ dự báo **không** được gửi vào chat để không lẫn với cảm biến nhiệt tại vườn (bộ kiểm tra `garden_facts` đối chiếu "nhiệt độ" với cảm biến). Dự báo `stale`/`unavailable` không được gửi; thay vào đó có cảnh báo "Chưa có dự báo thời tiết mới". Weather tắt thì `weather: null`, không cảnh báo. Dự báo lấy từ cache RAM, không phụ thuộc PostgreSQL.
 
 Lỗi dùng `detail.code/message`: `chat_unavailable` (503), `chat_rate_limited` (503), `chat_timeout` (504), `chat_invalid_response` (502), `invalid_payload` (422). Không tự retry upstream. Người dùng chọn **Thử lại** hoặc **Sửa câu hỏi**, không nhân đôi lượt hỏi. Tạo hội thoại mới hủy request phía client; việc hủy có dừng được GPU generation hay không phụ thuộc server Kaggle.
 
@@ -92,7 +95,7 @@ Lỗi dùng `detail.code/message`: `chat_unavailable` (503), `chat_rate_limited`
 
 Đã chuẩn bị [notebook server Kaggle có thể áp dụng](KAGGLE_SERVER.md), giữ nguyên API `response` hiện tại và có probe system/history. Đây là bản mới trong repo, chưa thay server đang chạy trên tài khoản Kaggle.
 
-Prompt phiên bản `smart-garden-agro-v1` nằm tại [agro_system_v1.md](../backend/app/prompts/agro_system_v1.md). Backend sở hữu prompt; mỗi lượt lấy lại dữ liệu mới, không tái sử dụng snapshot cũ. Prompt yêu cầu tư vấn có căn cứ, hỏi thông tin còn thiếu, không chẩn đoán chắc chắn từ một triệu chứng, không tự tạo số đo/nguồn trích dẫn, và không suy ra thời gian bơm nếu chưa biết lưu lượng/diện tích/giá thể.
+Prompt phiên bản `smart-garden-agro-v2` nằm tại [agro_system_v2.md](../backend/app/prompts/agro_system_v2.md) (v1 giữ lại làm lịch sử). v2 thêm mục DỰ BÁO THỜI TIẾT: chỉ nói về thời tiết khi `weather` có dữ liệu, luôn gọi là dự báo, chỉ dùng để gợi ý cân nhắc hoãn tưới, không bao giờ làm lý do tưới thêm. Backend sở hữu prompt; mỗi lượt lấy lại dữ liệu mới, không tái sử dụng snapshot cũ. Prompt yêu cầu tư vấn có căn cứ, hỏi thông tin còn thiếu, không chẩn đoán chắc chắn từ một triệu chứng, không tự tạo số đo/nguồn trích dẫn, và không suy ra thời gian bơm nếu chưa biết lưu lượng/diện tích/giá thể.
 
 Markdown được render bằng `react-markdown`, bỏ raw HTML và ảnh ngoài, không dùng `dangerouslySetInnerHTML`. Khối `<think>...</think>` và khối mở chưa kết thúc được lọc; nếu chỉ có suy nghĩ mà không có câu trả lời thì báo lỗi. Nếu model thường hết `max_tokens` trong phần suy nghĩ, kiểm tra cấu hình chat template tại Kaggle trước khi tăng giới hạn; không tự thêm tham số API mà server chưa hỗ trợ.
 

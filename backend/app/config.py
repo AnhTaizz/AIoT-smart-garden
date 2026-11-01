@@ -12,6 +12,27 @@ def _int_env(name: str, default: int, minimum: int = 1) -> int:
     return value
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    if not value:
+        return default
+    if value in ("true", "1", "yes"):
+        return True
+    if value in ("false", "0", "no"):
+        return False
+    raise ValueError(f"{name} must be true or false")
+
+
+def _coordinate_env(name: str, limit: float) -> float | None:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return None
+    number = float(value)
+    if not math.isfinite(number) or not -limit <= number <= limit:
+        raise ValueError(f"{name} must be between -{limit:g} and {limit:g}")
+    return number
+
+
 def _real_device_ids() -> tuple[str, ...]:
     values = tuple(dict.fromkeys(value.strip() for value in
                                 os.getenv("IRRIGATION_REAL_DEVICE_IDS", "").split(",") if value.strip()))
@@ -57,6 +78,13 @@ class Settings:
     pump_on_rate_limit: int = 6
     pump_on_rate_window_seconds: int = 60
     irrigation_real_device_ids: tuple[str, ...] = ()
+    # Open-Meteo forecast (W3, read-only); off until explicitly enabled.
+    weather_enabled: bool = False
+    weather_latitude: float | None = None
+    weather_longitude: float | None = None
+    weather_refresh_seconds: int = 1800
+    weather_max_age_seconds: int = 7200
+    weather_timeout_seconds: int = 10
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -69,6 +97,10 @@ class Settings:
         operator_role = os.getenv("OPERATOR_ROLE", "operator").strip()
         if operator_role not in ("operator", "viewer"):
             raise ValueError("OPERATOR_ROLE must be 'operator' or 'viewer'")
+        weather_refresh_seconds = _int_env("WEATHER_REFRESH_SECONDS", 1800, minimum=600)
+        weather_max_age_seconds = _int_env("WEATHER_MAX_AGE_SECONDS", 7200, minimum=900)
+        if weather_max_age_seconds < weather_refresh_seconds:
+            raise ValueError("WEATHER_MAX_AGE_SECONDS must be >= WEATHER_REFRESH_SECONDS")
         return cls(
             db_host=os.getenv("DB_HOST", "postgres"),
             db_port=_int_env("DB_PORT", 5432),
@@ -112,6 +144,12 @@ class Settings:
                 if origin.strip()
             ),
             irrigation_real_device_ids=_real_device_ids(),
+            weather_enabled=_bool_env("WEATHER_ENABLED", False),
+            weather_latitude=_coordinate_env("WEATHER_LATITUDE", 90),
+            weather_longitude=_coordinate_env("WEATHER_LONGITUDE", 180),
+            weather_refresh_seconds=weather_refresh_seconds,
+            weather_max_age_seconds=weather_max_age_seconds,
+            weather_timeout_seconds=_int_env("WEATHER_TIMEOUT_SECONDS", 10),
         )
 
     def database_connection_parameters(self) -> dict[str, Any]:

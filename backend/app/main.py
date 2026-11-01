@@ -17,6 +17,7 @@ from .access import ControlAccess, control_access
 from .auth import AUTH_ERRORS, OperatorDep, SessionDep, limiters, rate_limited, router as auth_router
 from .chat import CHAT_ERRORS, router as chat_router
 from . import irrigation
+from . import weather
 from .config import Settings
 from .http_config import configure_cors
 from .db import apply_migrations, create_pool
@@ -109,6 +110,7 @@ async def _run_background(app: FastAPI) -> None:
         consume(app.state.queue, MessageHandler(app.state.pool)),
         _sweep_timeouts(app),
         irrigation.run(app),
+        weather.run(app),
     )
 
 
@@ -123,6 +125,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.bridge = MqttBridge(settings, asyncio.get_running_loop(), app.state.queue)
     background = asyncio.create_task(_run_background(app))
     app.state.chat_client = httpx.AsyncClient(follow_redirects=False)
+    app.state.weather_client = httpx.AsyncClient(follow_redirects=False)
     app.state.issue_irrigation_command = issue_command
     try:
         yield
@@ -132,6 +135,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await background
         app.state.bridge.stop()
         await app.state.chat_client.aclose()
+        await app.state.weather_client.aclose()
         await app.state.pool.close()
 
 
@@ -139,6 +143,7 @@ app = FastAPI(title="Smart Garden API", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(irrigation.router)
+app.include_router(weather.router)
 configure_cors(app, Settings.from_env())
 
 

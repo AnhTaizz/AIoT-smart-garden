@@ -17,6 +17,7 @@ FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 | --- | --- |
 | `app/main.py` | Lifespan, REST endpoint, thân lỗi chuẩn hóa |
 | `app/chat.py` | `POST /chat`: gọi API Kaggle, gắn bản chụp vườn, chặn khẳng định sai về thiết bị |
+| `app/weather.py` | `GET /weather`: dự báo Open-Meteo (W3, schema AGREED 2026-11-01), cache RAM làm mới định kỳ, chỉ đọc, không phát lệnh |
 | `app/http_config.py` | CORS allow-list tường minh (không wildcard, không credentials) |
 | `app/auth.py` | Đăng nhập, hash scrypt, phiên Bearer lưu hash trong PostgreSQL, dependency 401/403, CLI tạo hash |
 | `app/access.py` | Quyền điều khiển theo role của phiên (`/control-access`) |
@@ -43,6 +44,7 @@ Qua dashboard dùng tiền tố `/api` (Nginx/Vite proxy); gọi trực tiếp F
 | `GET /devices/{id}/state` | State thiết bị tự báo gần nhất kèm `boot_id`, `state_sequence`, `stale`; 404 `no_state` |
 | `GET /control-access` | `{"commands_allowed": bool, "reason": "forbidden" \| null, "role"}` theo phiên hiện tại; UI dùng để khóa nút bơm |
 | `POST /chat` | Tư vấn nông nghiệp; không publish command. `CHAT_API_URL` trống → `503 chat_unavailable` (`reason: not_configured`) |
+| `GET /weather` | Dự báo mưa Open-Meteo đã cache: `status` `fresh`/`stale`/`unavailable`/`disabled`, tóm tắt 6 giờ và 12 giờ theo giờ. Cần phiên (viewer đọc được). Chỉ là dự báo, không phải số đo; xem [INTERFACES](../docs/INTERFACES.md#w3-weather-aware-auto--g02-extension-proposed-2026-10-31) |
 
 ### Xác thực và phân quyền (BC-02)
 
@@ -108,6 +110,8 @@ Telemetry trùng `device_id` + `boot_id` + `sequence` bị **bỏ qua im lặng*
 | `LOGIN_MAX_CONCURRENT` | 2 | Số phép kiểm tra mật khẩu scrypt (~128 MiB mỗi phép) chạy cùng lúc; vượt → `429 login_busy` |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost` | Danh sách origin cách nhau bằng dấu phẩy; `*` bị từ chối khi khởi động; rỗng = tắt CORS. Web cùng origin qua `/api` không cần thêm. CORS không phải xác thực |
 | `CHAT_API_URL`, `CHAT_API_KEY`, `CHAT_TEMPERATURE`, `CHAT_MAX_TOKENS`, `CHAT_TIMEOUT_SECONDS` | Xem `.env.example` | Chỉ ở backend; xem [CHATBOT](../docs/CHATBOT.md) |
+| `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | `false`, trống, trống | Bật dự báo Open-Meteo cho tọa độ vườn; thiếu tọa độ → `disabled` (`weather_not_configured`). URL provider cố định trong code |
+| `WEATHER_REFRESH_SECONDS`, `WEATHER_MAX_AGE_SECONDS`, `WEATHER_TIMEOUT_SECONDS` | 1800 (tối thiểu 600), 7200 (≥ refresh), 10 | Chỉ gọi provider theo lịch này; lỗi thì thử lại sau 5 phút và giữ bản cũ; quá max age → `stale` |
 
 ## Chạy và kiểm tra
 

@@ -1,5 +1,7 @@
 # Kế hoạch bổ sung W3 — Weather-aware Auto Irrigation và kiểm thử Claude Code local
 
+> **Cập nhật 2026-11-01 (nhánh `feat/w3-weather`):** P2 đã implement. `GET /weather` read-only có xác thực, adapter Open-Meteo có cache, timeout và validation, feature flag `WEATHER_ENABLED` (mặc định tắt), Weather Card trên dashboard và unit test có fake provider. Theo yêu cầu chủ dự án, dự báo fresh còn được đưa vào ngữ cảnh chatbot và observation của supervisor tưới AI (prompt `smart-garden-agro-v2`, `irrigation-decision-v2`). Đây chỉ là dữ liệu cho model; chặn server không đọc weather, không có advisory `delay/no_delay` cứng, không MQTT hay firmware. P3 (advisory dry-run có ngưỡng), P4 (G02 review) và P5 (E2E fake provider + simulator, phần cứng) **chưa làm**. Schema REST `GET /weather` đã được Thành, Tài, Toản xác nhận (**AGREED** 2026-11-01), xem [INTERFACES](INTERFACES.md#get-weather--rest-read-only-agreed-2026-11-01). Ngưỡng hoãn tưới và tọa độ vườn thật chưa chốt; demo dùng trung tâm Hà Nội.
+
 Ngày lập: 2026-10-31. **Loại:** thay đổi phạm vi theo yêu cầu chủ dự án; **chưa phải bằng chứng G02 AGREED/M3 PASS**. Phạm vi bổ sung nằm trong W3 (M3), không thay mã task B-W1...B-W7 và không thay việc của A/C. A (Thành) và C (Toản) cần xem lại giao tiếp và tiêu chí nghiệm thu.
 
 ## 0. Trạng thái nguồn phải kiểm tra lại trước mọi thao tác

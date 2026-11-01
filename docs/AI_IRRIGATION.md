@@ -38,7 +38,8 @@ nghiệm thu tích hợp trên board thật, hiệu chuẩn cảm biến hoặc 
 - Dự trù thời lượng và mốc nghỉ được commit trước publish; lỗi gửi vẫn tiêu ngân sách, không tự phát lại ON. Lệnh pending/timeout/rejected chặn lần tiếp; lỗi AI/API/thực thi tắt AUTO.
 - Lệnh tay ON/OFF đều tắt AUTO và tăng revision. MANUAL từ bảng cấu hình cũng gửi STOP. Không suy ra bơm đã dừng chỉ từ HTTP; phải đọc ACK/state. Nếu MQTT down, việc dừng phụ thuộc giới hạn thiết bị.
 - Backend restart yêu cầu bật AUTO lại. Khóa thiết bị tuần tự hóa thao tác tay và AUTO; lease DB chống hai worker đánh giá/gửi cùng lượt. Khởi động worker mới có thể hủy AUTO đang chạy; demo dùng một backend worker.
-- Chatbot `/chat` tiếp tục chỉ tư vấn. Prompt quyết định riêng là `irrigation-decision-v1`. Chưa coi checkpoint Kaggle là đạt chất lượng tưới chỉ vì HTTP 200.
+- Chatbot `/chat` tiếp tục chỉ tư vấn. Prompt quyết định riêng là `irrigation-decision-v2`. Chưa coi checkpoint Kaggle là đạt chất lượng tưới chỉ vì HTTP 200.
+- Dự báo thời tiết (W3; schema `GET /weather` AGREED 2026-11-01, cách dùng trong AUTO vẫn thử nghiệm): observation gửi model có thêm `weather`. Khi dự báo Open-Meteo **fresh** là tóm tắt mưa 6 giờ tới (`kind: "forecast"`, xác suất cao nhất theo giờ, tổng mm, khung giờ, `fetched_at`); ngược lại chỉ `{status, reason}`. Prompt v2 yêu cầu model coi đây là dự báo tham khảo, chỉ dùng để cân nhắc **không tưới/hoãn** khi sắp mưa, không bao giờ dùng để tưới hoặc tưới lâu hơn. Đây là chỉ dẫn mềm cho model: các chặn phía server (soil, stale, boot, relay, nghỉ, ngân sách, ACK) **không đọc** weather và không đổi; weather tắt/lỗi không chặn đánh giá. Ngưỡng "mưa đáng kể" chưa được nhóm chốt nên không có quy tắc cứng; chưa thử với Qwen thật trên simulator.
 
 ## API và dữ liệu
 

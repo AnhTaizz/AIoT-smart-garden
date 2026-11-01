@@ -624,7 +624,7 @@ Thành (A): xác nhận ngày 2026-09-29. Tài (B): xác nhận ngày 2026-09-29
 
 ## W3 Weather-aware Auto — G02 extension PROPOSED (2026-10-31)
 
-**Trạng thái: PROPOSED, CHƯA AGREED.** Yêu cầu chủ dự án: thêm dự báo mưa vào chế độ Auto trong W3. Thành (A) và Toản (C) phải xác nhận trước khi mở các MQTT topic/payload/config mới; firmware vẫn sở hữu quyền quyết định relay, STOP và giới hạn thời gian.
+**Trạng thái:** Schema REST `GET /weather` **AGREED** ngày 2026-11-01 (Thành, Tài, Toản), xem mục con bên dưới. Phần còn lại (advisory có ngưỡng, MQTT topic/payload/config cho firmware) vẫn **PROPOSED, CHƯA AGREED**. Yêu cầu chủ dự án: thêm dự báo mưa vào chế độ Auto trong W3. Thành (A) và Toản (C) phải xác nhận trước khi mở các MQTT topic/payload/config mới; firmware vẫn sở hữu quyền quyết định relay, STOP và giới hạn thời gian.
 
 - Backend B lấy Open-Meteo theo tọa độ cấu hình, cache + timeout, thông tin fetched_at/valid_until và đánh dấu fresh/stale/unavailable/disabled. REST weather read-only cần phiên hợp lệ; đường dẫn/schema chính thức chốt sau review. Không phát MQTT hoặc pump_on trong phase read-only.
 - Advisory dry-run đề xuất: delay/no_delay/unknown; reason + khoảng thời gian dự báo + TTL. Forecast stale hoặc không có dữ liệu không được dùng để hoãn Auto thêm lần mới. Ngưỡng xác suất mưa/lượng mưa/ẩm đất và thời gian hoãn chưa chốt.
@@ -632,3 +632,48 @@ Thành (A): xác nhận ngày 2026-09-29. Tài (B): xác nhận ngày 2026-09-29
 - Kiểm thử: fake weather provider, timeout/429/5xx, null/out-of-order/UTC, stale, Wi-Fi/MQTT disconnect, boot, STOP, relay-safe và E2E simulator trước ESP32 thật. Chưa gọi M3 PASS khi chỉ mô phỏng.
 
 Chi tiết: [W3_WEATHER_LOCAL_EXECUTION_PLAN](W3_WEATHER_LOCAL_EXECUTION_PLAN.md).
+
+### `GET /weather` — REST read-only, AGREED 2026-11-01
+
+Thành (A), Tài (B) và Toản (C) xác nhận schema dưới đây ngày 2026-11-01. Nhánh `feat/w3-weather` đã implement bước P2 và đưa dự báo vào ngữ cảnh model (chatbot, supervisor AI). **Không** có topic/payload MQTT mới, không có bảng/migration, không gửi weather tới firmware và không đổi command lifecycle G02. Thay đổi schema này từ nay cần quyết định mới của cả ba người.
+
+- Endpoint: `GET /weather` (qua dashboard `/api/weather`). Cần phiên hợp lệ: anonymous `401 auth_required`, viewer đọc được. Không gắn `device_id` vì tọa độ là cấu hình chung của một vườn (`WEATHER_LATITUDE`/`WEATHER_LONGITUDE`).
+- Nguồn: Open-Meteo Forecast, URL cố định trong backend, `hourly=precipitation_probability,precipitation,temperature_2m`, `forecast_hours=12`, `timeformat=unixtime`. Backend làm mới cache RAM mỗi `WEATHER_REFRESH_SECONDS` (mặc định 1800); request chỉ đọc cache, không gọi provider.
+- Validate: các mảng `hourly` dài bằng `time`, `time` tăng dần, xác suất 0..100 %, mưa 0..500 mm, nhiệt độ −60..60 °C; NaN/Infinity, sai kiểu hoặc JSON hỏng bị từ chối và **giữ bản cũ**. `null` từ provider giữ là `null`, không đổi thành 0. Thời gian xuất UTC có `Z`.
+
+```json
+{
+  "status": "fresh",
+  "reason": null,
+  "message": null,
+  "provider": "open-meteo",
+  "kind": "forecast",
+  "latitude": 21.03,
+  "longitude": 105.85,
+  "fetched_at": "2026-11-01T05:36:08Z",
+  "valid_until": "2026-11-01T07:36:08Z",
+  "summary": {
+    "window_start": "2026-11-01T05:36:21Z",
+    "window_end": "2026-11-01T11:36:21Z",
+    "hours_in_window": 7,
+    "hours_with_data": 7,
+    "max_precipitation_probability_pct": 29.0,
+    "total_precipitation_mm": 0.6
+  },
+  "hours": [
+    {"time": "2026-11-01T05:00:00Z", "precipitation_probability_pct": 1.0, "precipitation_mm": 0.0, "temperature_c": 31.8}
+  ],
+  "attribution": "Weather data by Open-Meteo.com (CC BY 4.0)",
+  "attribution_url": "https://open-meteo.com/"
+}
+```
+
+| `status` | Khi nào | `reason` |
+| --- | --- | --- |
+| `fresh` | Có bản fetch thành công chưa quá `WEATHER_MAX_AGE_SECONDS` (mặc định 7200). Một lần làm mới lỗi không làm mất trạng thái fresh khi bản cũ còn hạn | `null` |
+| `stale` | Bản gần nhất đã quá max age; vẫn trả `hours`/`summary` để hiển thị có nhãn cũ, **không** dùng để hoãn tưới | lỗi gần nhất hoặc `weather_expired` |
+| `unavailable` | Bật và có tọa độ nhưng chưa fetch thành công lần nào kể từ khi backend khởi động | `weather_not_fetched`, `provider_timeout`, `provider_unreachable`, `provider_rate_limited`, `provider_error`, `provider_invalid_response` |
+| `disabled` | `WEATHER_ENABLED=false` hoặc thiếu tọa độ | `weather_disabled`, `weather_not_configured` |
+
+`message` là câu tiếng Việt tương ứng với `reason`. `summary` tính trên các giờ chồng lên cửa sổ 6 giờ kể từ thời điểm đọc. `max_precipitation_probability_pct` là **xác suất cao nhất của một giờ**, không phải xác suất có mưa trong cả cửa sổ. `total_precipitation_mm` chỉ cộng các giờ có dữ liệu, và `hours_with_data < hours_in_window` nghĩa là có giờ thiếu. Không có dữ liệu thì cả hai là `null`. Hệ thống không cài ngưỡng "mưa đáng kể", không tạo advisory `delay/no_delay` và không chặn lệnh cứng theo thời tiết; những phần này chờ nhóm hiệu chuẩn và chốt (P3/P4).
+

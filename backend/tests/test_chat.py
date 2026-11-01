@@ -3,7 +3,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -116,6 +116,54 @@ def test_fresh_snapshot_masks_failed_sensor_and_labels_stale_simulation(chat_env
     # Every turn queries the repository again, never reusing the previous snapshot.
     client.post("/chat", json={"message": "Bây giờ thì sao?"})
     assert repository.latest_telemetry.await_count == 2
+
+
+def _weather_settings(monkeypatch, fetched_at):
+    from app import weather
+    monkeypatch.setattr(app.state, "settings", replace(
+        app.state.settings, weather_enabled=True, weather_latitude=21.03, weather_longitude=105.85))
+    start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    cache = weather.WeatherCache(fetched_at=fetched_at, hours=weather.parse_forecast({"hourly": {
+        "time": [int(start.timestamp()) + 3600 * i for i in range(12)],
+        "precipitation_probability": [80] + [10] * 11,
+        "precipitation": [2.5] + [0.0] * 11,
+        "temperature_2m": [31.0] * 12,
+    }}))
+    monkeypatch.setattr(app.state, "weather_cache", cache, raising=False)
+
+
+def test_fresh_forecast_is_labelled_and_excludes_forecast_temperature(chat_env, monkeypatch):
+    client, _, captured, _ = chat_env
+    _weather_settings(monkeypatch, datetime.now(timezone.utc))
+    result = client.post("/chat", json={"message": "Sắp tới có mưa không?"})
+    assert result.status_code == 200
+    forecast = result.json()["context"]["weather"]
+    assert forecast["kind"] == "forecast" and forecast["provider"] == "open-meteo"
+    assert forecast["max_precipitation_probability_pct"] == 80
+    assert forecast["total_precipitation_mm"] == 2.5
+    body = json.loads(captured[0].content)["messages"]
+    assert "DỰ BÁO THỜI TIẾT" in body[0]["content"]
+    assert '"max_precipitation_probability_pct": 80' in body[0]["content"]
+    # Forecast temperature would be confused with the garden sensor by guard_reply.
+    assert "temperature" not in json.dumps(forecast)
+    assert "không phải số đo tại vườn" in body[-1]["content"]
+
+
+def test_stale_forecast_is_withheld_with_warning(chat_env, monkeypatch):
+    client, _, captured, _ = chat_env
+    _weather_settings(monkeypatch, datetime.now(timezone.utc) - timedelta(hours=3))
+    context = client.post("/chat", json={"message": "Có mưa không?"}).json()["context"]
+    assert context["weather"] is None
+    assert any("dự báo thời tiết" in warning for warning in context["warnings"])
+    sent = json.loads(captured[0].content)["messages"][0]["content"].split("GARDEN_CONTEXT_JSON (")[-1]
+    assert '"weather": null' in sent
+
+
+def test_disabled_weather_adds_nothing(chat_env):
+    client, _, _, _ = chat_env
+    context = client.post("/chat", json={"message": "Có mưa không?"}).json()["context"]
+    assert context["weather"] is None
+    assert not any("thời tiết" in warning for warning in context["warnings"])
 
 
 def test_database_down_falls_back_to_general_advice(chat_env):

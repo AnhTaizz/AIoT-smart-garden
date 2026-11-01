@@ -95,6 +95,20 @@ Thành merge PR #10 vào `main` sau khi nhánh integration được tạo. Ngoà
 - Deploy demo: `.env` không đặt `IRRIGATION_REAL_DEVICE_IDS` → `GET /devices/node_01/irrigation` trả `execution_scope: simulator_only`; anonymous 401; admin đăng nhập được; simulator vẫn gửi dữ liệu.
 - Kiến trúc: `main` nay theo hướng **server quyết định tưới**, trái với CLAUDE.md §3. Nhóm cần ghi quyết định chính thức rồi sửa CLAUDE.md/W3; tài liệu đã nêu rõ mâu thuẫn, không tự chọn.
 
+## 5d. Hợp nhất lần 2 — Weather W3 (nhánh `integration/smart-garden-unified-20261101-v2`)
+
+Sau khi PR #11 merge vào `main` (`d7ffd3e`), chỉ còn 3 nhánh có commit ngoài `main`:
+
+| Nhánh | Quyết định | Lý do |
+| --- | --- | --- |
+| `feat/w3-weather` (`879b464..c75d2f4`, 6 commit) | **Hợp nhất** (merge sạch, `8f4d92a`) | `GET /weather` chỉ đọc, cần đăng nhập, URL Open-Meteo cố định, `WEATHER_ENABLED=false` mặc định; Weather Card; dự báo làm context tham khảo cho chatbot và model tưới (prompt `irrigation-decision-v2`), các guard của supervisor không đọc weather và prompt cấm dùng weather làm lý do tưới |
+| `feat/A-W1-esp32-firmware` (PlatformIO) | Không hợp nhất | Bản firmware thay thế, đối nghịch với firmware Arduino IDE trên `main` mà board thật đang chạy; hard-code pin/ngưỡng; có Auto trên ESP32 xung đột với AUTO phía server đang dùng. Thành đã chủ động chuyển sang Arduino IDE |
+| local `feat/remote-mobile-cloudflare` (`d1d6351`, chưa push) | Không hợp nhất | Merge thủ công ngày 27/10 giữa PR #4 và chatbot; phần code đã được thay bằng BC-01/BC-02 trên `main` |
+
+Regression (stack tách biệt `sg-regression`): backend unit + E2E **309 PASS**, 2 SKIP (live Kaggle); simulator **31/31**; frontend **86/86** + build; firmware native **95 checks**. Cây mã của nhánh v2 trùng với `feat/w3-weather` đang chạy trên demo (commit cuối chỉ sửa docs/docstring), nên không deploy lại.
+
+Vận hành demo cùng ngày (ngoài repo, `.env` bị ignore): bật broker xác thực `compose.secure.yaml` và `IRRIGATION_REAL_DEVICE_IDS=node_01` để supervisor có thể chạy AUTO cho ESP32 thật khi người vận hành bật. AUTO chưa được bật.
+
 ## 6. Bảo mật — vấn đề mở
 
 1. **Đã xử lý ở §5a (2026-11-01).** Trước khi deploy, stack đang chạy là bản trước BC-02. Container backend build 2026-10-06; OpenAPI công khai không có `/auth`; `GET /devices/node_01/latest` trả 200 cho người lạ qua `garden-api`. Theo tài liệu PR #4, `POST /devices/{id}/commands` cũng không cần xác thực. Hiện không có thiết bị online (telemetry cuối 2026-10-06, `simulated: true`), nên chưa có rủi ro bơm vật lý, nhưng **không kết nối ESP32 bật điều khiển** cho tới khi deploy bản này.

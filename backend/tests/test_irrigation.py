@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from dataclasses import replace
 import asyncio
+import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -152,6 +153,65 @@ def test_real_supervisor_rechecks_before_dispatch(policy, monkeypatch, change):
             issue.assert_not_awaited()
             assert recorded.await_args.args[3] in ("blocked", "cancelled", "error")
             assert not any("last_attempt=now()" in call.args[0] for call in conn.execute.await_args_list)
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("forecast", ["fresh", "unavailable", "disabled"])
+def test_forecast_is_model_input_only_and_never_blocks_evaluation(policy, monkeypatch, forecast):
+    """Simulator path with mocked I/O: weather reaches the model but the guards ignore it."""
+    from app import weather
+    async def run():
+        now = datetime.now(timezone.utc)
+        profile = dict(device_id="node_01", lease_token=uuid4(), policy=policy.model_dump(),
+                       revision=1, enabled=True, lease_until=now + timedelta(seconds=180), last_attempt=None)
+
+        async def execute(sql, params=()):
+            if "pg_try_advisory_lock" in sql: row = {"acquired": True}
+            elif "SELECT * FROM irrigation_profile" in sql: row = profile
+            elif "COALESCE(sum(reserved_seconds)" in sql: row = {"spent": 0}
+            else: row = None
+            return SimpleNamespace(fetchone=AsyncMock(return_value=row))
+
+        conn = SimpleNamespace(execute=AsyncMock(side_effect=execute), commit=AsyncMock(), rollback=AsyncMock())
+        @asynccontextmanager
+        async def connection():
+            yield conn
+        settings = replace(Settings.from_env(), chat_api_url="http://ai.test/decide",
+                           weather_enabled=forecast != "disabled", weather_latitude=21.03, weather_longitude=105.85)
+        cache = weather.WeatherCache()
+        if forecast == "fresh":
+            start = now.replace(minute=0, second=0, microsecond=0)
+            cache.fetched_at = now
+            cache.hours = weather.parse_forecast({"hourly": {
+                "time": [int(start.timestamp()) + 3600 * i for i in range(12)],
+                "precipitation_probability": [90] * 12, "precipitation": [1.0] * 12, "temperature_2m": [30.0] * 12}})
+        issue = AsyncMock()
+        app = SimpleNamespace(state=SimpleNamespace(settings=settings, weather_cache=cache,
+                              pool=SimpleNamespace(connection=connection), issue_irrigation_command=issue))
+        captured = []
+        async def model_reply(request):
+            captured.append(request)
+            return httpx.Response(200, json={"response": '{"water":true,"duration_seconds":2,"reason":"Test response"}'})
+        t, s = observation()
+        monkeypatch.setattr(irrigation, "snapshot", AsyncMock(return_value=(t, s)))
+        monkeypatch.setattr(irrigation, "history", AsyncMock(return_value=[]))
+        monkeypatch.setattr(irrigation, "record", AsyncMock(return_value=uuid4()))
+        monkeypatch.setattr(irrigation.repository, "list_commands", AsyncMock(return_value=[]))
+        async with httpx.AsyncClient(transport=httpx.MockTransport(model_reply)) as client:
+            app.state.chat_client = client
+            await irrigation.evaluate(app, profile)
+        body = json.loads(captured[0].content)
+        sent = json.loads(body["messages"][1]["content"])
+        assert sent["prompt_version"] == "irrigation-decision-v2"
+        assert sent["weather"]["status"] == forecast
+        assert "không bao giờ dùng thời tiết làm lý do để tưới" in body["messages"][0]["content"]
+        if forecast == "fresh":
+            assert sent["weather"]["kind"] == "forecast"
+            assert sent["weather"]["max_precipitation_probability_pct"] == 90
+        else:
+            assert set(sent["weather"]) == {"status", "reason"}
+        # The server-side decision path is unchanged by the forecast.
+        issue.assert_awaited_once()
     asyncio.run(run())
 
 

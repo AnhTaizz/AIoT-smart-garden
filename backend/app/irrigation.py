@@ -13,14 +13,14 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
 from psycopg.types.json import Jsonb
 
-from . import repository
+from . import repository, weather
 from .auth import OperatorDep, SessionDep
 from .chat import clean_reply
 from .schemas import CommandCreate, DEVICE_ID_PATTERN
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-PROMPT_VERSION = "irrigation-decision-v1"
+PROMPT_VERSION = "irrigation-decision-v2"
 
 
 class Policy(BaseModel):
@@ -217,7 +217,9 @@ async def evaluate(app, profile):
         async with app.state.pool.connection() as conn:
             t, s = await snapshot(conn, app, device_id)
             recent = await history(conn, device_id)
-        observation = {"telemetry": t, "state": s, "policy": policy.model_dump(), "history": recent[:5], "prompt_version": PROMPT_VERSION}
+        # Forecast is advisory input for the model only; the guards below never read it.
+        observation = {"telemetry": t, "state": s, "policy": policy.model_dump(), "history": recent[:5],
+                       "weather": weather.advisory(app), "prompt_version": PROMPT_VERSION}
         reason = check_device_observation(app, device_id, t, s, policy)
         if reason:
             async with app.state.pool.connection() as conn:
@@ -228,7 +230,7 @@ async def evaluate(app, profile):
             headers["Authorization"] = "Bearer " + app.state.settings.chat_api_key
         async with asyncio.timeout(app.state.settings.chat_timeout_seconds):
             response = await app.state.chat_client.post(app.state.settings.chat_api_url, headers=headers, timeout=app.state.settings.chat_timeout_seconds, json={
-                "messages": [{"role": "system", "content": "Bạn là bộ quyết định tưới thử nghiệm Smart-Garden. Chỉ xuất một JSON đúng schema: {\"water\":true hoặc false,\"duration_seconds\":số nguyên,\"reason\":\"lý do tiếng Việt\"}. Không tưới thì duration_seconds=0. Nếu chưa đủ căn cứ, chọn không tưới. Không vượt max_pulse_seconds. Cân nhắc loại cây, giá thể, số đo và các lần tưới trước. Không giả mạo số đo. Không xuất Markdown hoặc suy nghĩ. /no_think"},
+                "messages": [{"role": "system", "content": "Bạn là bộ quyết định tưới thử nghiệm Smart-Garden. Chỉ xuất một JSON đúng schema: {\"water\":true hoặc false,\"duration_seconds\":số nguyên,\"reason\":\"lý do tiếng Việt\"}. Không tưới thì duration_seconds=0. Nếu chưa đủ căn cứ, chọn không tưới. Không vượt max_pulse_seconds. Cân nhắc loại cây, giá thể, số đo và các lần tưới trước. Không giả mạo số đo. weather là dự báo tham khảo, không phải số đo tại vườn. Chỉ khi weather.status là fresh mới được dùng nó để cân nhắc không tưới hoặc hoãn tưới vì sắp có mưa; không bao giờ dùng thời tiết làm lý do để tưới hoặc tưới lâu hơn. Không xuất Markdown hoặc suy nghĩ. /no_think"},
                              {"role": "user", "content": json.dumps(jsonable_encoder(observation), ensure_ascii=False)}],
                 "temperature": 0, "max_tokens": 512})
         response.raise_for_status()

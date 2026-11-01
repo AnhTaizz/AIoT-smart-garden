@@ -16,14 +16,14 @@ from fastapi.encoders import jsonable_encoder
 from psycopg_pool import PoolTimeout
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from . import repository
+from . import repository, weather
 from .auth import SessionDep, limiters, rate_limited
 from .schemas import DEVICE_ID_PATTERN
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-PROMPT_VERSION = "smart-garden-agro-v1"
-SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "agro_system_v1.md").read_text(
+PROMPT_VERSION = "smart-garden-agro-v2"
+SYSTEM_PROMPT = (Path(__file__).parent / "prompts" / "agro_system_v2.md").read_text(
     encoding="utf-8"
 )
 CHAT_ERRORS = {
@@ -82,12 +82,28 @@ class GardenState(BaseModel):
     relay_state: Literal["on", "off"]
 
 
+class GardenWeather(BaseModel):
+    """Fresh forecast rain summary; forecast temperature is deliberately left out
+    so it cannot be confused with the garden sensor in guard_reply."""
+    status: Literal["fresh"]
+    kind: Literal["forecast"]
+    provider: str
+    fetched_at: datetime
+    window_start: datetime
+    window_end: datetime
+    hours_in_window: int
+    hours_with_data: int
+    max_precipitation_probability_pct: float | None
+    total_precipitation_mm: float | None
+
+
 class GardenContext(BaseModel):
     status: Literal["included", "disabled", "unavailable"]
     device_id: str
     captured_at: datetime
     telemetry: GardenTelemetry | None = None
     state: GardenState | None = None
+    weather: GardenWeather | None = None
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -150,6 +166,12 @@ async def load_context(request: Request, body: ChatRequest) -> GardenContext:
         context.telemetry = None
         context.state = None
         context.warnings = ["Không lấy được dữ liệu vườn; trợ lý sẽ tư vấn kiến thức chung."]
+    # Independent of PostgreSQL: the forecast comes from the in-memory cache.
+    forecast = weather.advisory(request.app)
+    if forecast["status"] == "fresh":
+        context.weather = GardenWeather.model_validate(forecast)
+    elif forecast["status"] != "disabled":
+        context.warnings.append("Chưa có dự báo thời tiết mới; không dùng thời tiết để quyết định tưới.")
     return context
 
 
@@ -188,6 +210,18 @@ def garden_fact_lines(context: GardenContext) -> list[str]:
         lines.append(f"- Trạng thái bơm thiết bị báo về: **{'bật' if state.relay_state == 'on' else 'tắt'}** lúc {received} (UTC).")
     else:
         lines.append("- Chưa xác nhận được trạng thái bơm hiện tại; thông tin thiếu hoặc đã cũ.")
+    forecast = context.weather
+    if forecast:
+        start = forecast.window_start.astimezone(timezone.utc).isoformat()
+        end = forecast.window_end.astimezone(timezone.utc).isoformat()
+        probability = forecast.max_precipitation_probability_pct
+        amount = forecast.total_precipitation_mm
+        lines.append(
+            f"- Dự báo Open-Meteo (không phải số đo tại vườn) từ {start} đến {end} (UTC): "
+            + ("xác suất mưa cao nhất theo giờ " + (f"{probability:g}%" if probability is not None else "không rõ"))
+            + ", tổng lượng mưa dự báo "
+            + (f"{amount:g} mm." if amount is not None else "không rõ.")
+        )
     return lines
 
 

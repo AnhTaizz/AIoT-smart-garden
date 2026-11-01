@@ -1,7 +1,8 @@
 """BC-02 against the real stack: PostgreSQL sessions, Mosquitto, FastAPI, Nginx.
 
 E2E_PROXY_URL (the dashboard `/api` proxy) covers the Web/tunnel path. The
-stack must run with CHAT_API_URL unset for the not-configured chat check.
+not-configured chat check needs a stack with CHAT_API_URL unset; compose.test.yaml
+sets E2E_CHAT_CONFIGURED when it is set, and the check is then skipped.
 """
 
 import hashlib
@@ -161,6 +162,8 @@ def test_pump_on_limit_never_blocks_pump_off():
 
 @pytest.mark.parametrize("base", bases())
 def test_unconfigured_chat_is_a_clear_503_without_old_ngrok(base):
+    if os.getenv("E2E_CHAT_CONFIGURED"):
+        pytest.skip("stack has CHAT_API_URL configured; run with it unset to check the 503")
     status, body = raw_request(
         "POST", f"{base}/chat", {"message": "Xin chào", "include_garden_context": False},
         auth_headers(),

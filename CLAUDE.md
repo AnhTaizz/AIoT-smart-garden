@@ -7,10 +7,10 @@ tiên thay đổi nhỏ, kiểm chứng được và giữ đúng ranh giới an
 
 Đọc các tài liệu liên quan theo thứ tự sau:
 
-1. `README.md` — kiến trúc, cách chạy và phạm vi demo local mobile.
+1. `README.md` và `docs/REMOTE_DEMO.md` — kiến trúc, localhost development và remote demo qua Cloudflare.
 2. `docs/PROJECT_STATE.md` — trạng thái thực tế và các việc còn mở.
-3. `docs/INTERFACES.md` — MQTT/API và vòng đời command. File này hiện là
-   **DRAFT** cho tới khi G02 được cả nhóm xác nhận.
+3. `docs/INTERFACES.md` — MQTT/API và vòng đời command. G02 hiện là
+   **AGREED** theo xác nhận của cả nhóm ngày 2026-09-29.
 4. `docs/ROADMAP.md` — dependency và điều kiện nghiệm thu milestone.
 5. README của module và file phân công tương ứng trong `docs/assignments/`.
 
@@ -20,18 +20,21 @@ xuất rõ ràng, nhưng phải giữ trạng thái “chưa chốt” cho tới
 
 ## 2. Mục tiêu và kiến trúc
 
-Đích chính là **LOCAL MOBILE DEMO**, không phải public cloud deployment:
+Đích demo chính là **Internet user access qua Cloudflare Quick Tunnel**, giữ services trên laptop và MQTT LAN thiết bị:
 
 ```text
-ESP32/simulator -> MQTT -> FastAPI -> PostgreSQL -> React -> smartphone
-smartphone -> React -> FastAPI -> MQTT command -> ESP32/simulator -> ACK/state
-ESP32-CAM -> backend -> image/AI -> backend/frontend                 (phase sau)
+ESP32/simulator -> MQTT -> FastAPI -> PostgreSQL -> ReactJS web
+ReactJS production build -> Capacitor -> Android WebView/APK
+browser/Android -> REST/WebSocket -> FastAPI -> MQTT -> ESP32 -> ACK/state
+ESP32-CAM -> backend -> image/AI -> backend/ReactJS                 (phase sau)
 ```
 
 - Laptop chạy React/Nginx, FastAPI, Mosquitto và PostgreSQL bằng Docker Compose.
-- Điện thoại và ESP32 dùng IP LAN của laptop; chúng không dùng hostname Docker.
+- Chỉ có một codebase ReactJS responsive/mobile-first. Android đóng gói cùng build bằng Capacitor; không tạo React Native, Flutter hoặc native UI riêng.
+- Frontend luôn qua REST/WebSocket của FastAPI, không kết nối MQTT trực tiếp. WebSocket hiện chưa implement; polling REST là current behavior.
+- Web/mobile browser dùng HTTPS frontend tunnel; app Capacitor dùng HTTPS backend tunnel trực tiếp. ESP32 dùng IP LAN của laptop cho Mosquitto; user không cần cùng Wi-Fi, không dùng Docker hostname hoặc LAN IP.
 - Hoàn thiện IoT end-to-end và an toàn bơm trước khi tích hợp AI.
-- Weather API, nhiều vùng trồng và public deployment không thuộc core scope.
+- Cloudflare Quick Tunnel thuộc demo scope, không phải production deployment. Weather API và nhiều vùng trồng chưa thuộc core scope.
 
 ## 3. Các bất biến không được phá vỡ
 
@@ -78,8 +81,8 @@ API, enum, đơn vị hoặc command lifecycle:
 1. Xác định cả producer và consumer bị ảnh hưởng.
 2. Sửa code, validation, test và ví dụ tài liệu trong cùng thay đổi.
 3. Giữ tương thích nếu có thể; nếu không, ghi rõ migration/breaking change.
-4. Không tự đổi trạng thái `DRAFT` thành `AGREED`; cần xác nhận của Thành, Tài và
-   Toản theo G02.
+4. G02 đã `AGREED`; không tự thay đổi contract đã chốt nếu chưa có quyết định mới
+   của Thành, Tài và Toản.
 
 ## 4. Quy tắc theo module
 

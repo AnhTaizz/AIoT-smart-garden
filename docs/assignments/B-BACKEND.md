@@ -1,6 +1,9 @@
-# Tài — Backend và dữ liệu (Backend)
+# Tài — Backend, integration và mobile packaging
 
-Phụ trách: **Tài** (B). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Toản** (C); phối hợp **Thành** (A) cho giao tiếp thiết bị. Task chính: 14. Ước lượng chỉ tính công việc tập trung; review, tích hợp và dự phòng nằm trong phần giờ còn lại mỗi tuần. Task giữ **Backlog** nếu bên dưới không ghi trạng thái/bằng chứng khác.
+> Hướng hiện hành 2026-10-06: Cloudflare Internet user access + React/Capacitor Android/iOS; MQTT LAN riêng cho thiết bị. Các tiêu chí phone LAN cũ dưới đây là legacy/deprecated for user access. Công việc mới và test 4G/5G theo [REMOTE_DEMO](../REMOTE_DEMO.md); giữ nguyên lịch sử nghiệm thu M1.
+
+
+Phụ trách: **Tài** (B). GitHub username: điền trong [TEAM](../TEAM.md). Reviewer mặc định: **Toản** (C); phối hợp **Thành** (A) cho giao tiếp thiết bị. Ngoài 14 task backend ban đầu, B sở hữu workstream mới Capacitor/Android ở cuối file. Task giữ `[ ] TODO` nếu bên dưới không ghi trạng thái/bằng chứng khác.
 
 Đọc [ROADMAP](../ROADMAP.md), [INTERFACES](../INTERFACES.md) và [WORKFLOW](../WORKFLOW.md) trước khi bắt đầu. Các mã phụ thuộc thuộc file của Thành, Tài, Toản (A/B/C) tương ứng. Mã M là milestone chung, G là task chung. Có thể làm khung với mock trước; nghiệm thu tích hợp phải dùng đầu ra thật của dependency.
 
@@ -17,8 +20,8 @@ Mục tiêu chung: backend nối đủ MQTT subscriber → PostgreSQL → REST A
 - **Đầu ra:** Backend MQTT subscriber; migration/bảng telemetry; validate và lưu PostgreSQL.
 - **Tiêu chí nghiệm thu:** Ít nhất 10 telemetry hợp lệ từ simulator được lưu và truy vấn lại đúng `device_id`/sequence; JSON lỗi không làm dừng subscriber và không được lưu như dữ liệu hợp lệ.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Review/Test — code xong trên nhánh `feat/B-W1-backend-telemetry-command`, chờ Toản review; payload theo đề xuất của Tài, G02 chưa chốt.
-- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2). Ngày 2026-09-26 backend unit 51/51 và E2E thật 33/33; telemetry hợp lệ được lưu/truy vấn, payload lỗi bị từ chối và subscriber tiếp tục chạy. Cách chạy: [backend/README](../../backend/README.md); chi tiết: [bản ghi kiểm thử](../PR2_TEST_HANDOFF_2026-09-26.md).
+- **Trạng thái:** `[x] DONE` cho implementation/test; G02 đã AGREED.
+- **Issue / PR / bằng chứng:** PR #2 đã merge vào `main`. Audit 2026-09-29: full backend suite 84/84 pass, gồm telemetry hợp lệ lưu/truy vấn, payload lỗi bị từ chối và subscriber tiếp tục. Cách chạy: [backend README](../../backend/README.md); lịch sử: [PR2 test handoff](../PR2_TEST_HANDOFF_2026-09-26.md).
 
 ### B-W1-02 — REST telemetry và vòng đời command
 
@@ -27,10 +30,32 @@ Mục tiêu chung: backend nối đủ MQTT subscriber → PostgreSQL → REST A
 - **Đầu ra:** Latest/history API đọc PostgreSQL; API tạo/theo dõi command; MQTT publish control và consume ACK/state.
 - **Tiêu chí nghiệm thu:** Latest/history trả telemetry đã lưu; command có `command_id`; backend phân biệt `pending`, `applied`, `rejected`, `timeout`; HTTP 2xx tạo command không được coi là thiết bị đã áp dụng.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Review/Test — backend và simulator tham chiếu đã xong trên PR #2; chờ Toản review REST/UI, Thành review quy tắc thiết bị và cả nhóm chốt G02.
-- **Issue / PR / bằng chứng:** [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2). Ngày 2026-09-26 E2E thật 33/33 gồm deadline race và ACK order; simulator thật gửi ACK/state, command thành `applied`, rồi fail-safe OFF khi broker disconnect. Xem [bản ghi kiểm thử và bàn giao](../PR2_TEST_HANDOFF_2026-09-26.md). Chưa kiểm tra ESP32/UI/smartphone.
+- **Trạng thái:** `[x] DONE` cho backend software contract và M1 Web/LAN; tích hợp ESP32 thật thuộc M2.
+- **Issue / PR / bằng chứng:** PR #2 đã merge. Audit 2026-09-29: backend full suite 84/84 pass, gồm deadline race, ACK order, boot binding, persistence và evidence ACK+state. Xem [bản ghi kiểm thử và bàn giao](../PR2_TEST_HANDOFF_2026-09-26.md). Nhóm đã nghiệm thu M1 qua React trên browser điện thoại; chưa kiểm tra ESP32 thật.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
+
+## M1.5 — Android Packaging & Mobile Integration
+
+**Trạng thái milestone: `[!] BLOCKED ON PHYSICAL DEVICE TEST`.** M1.5A packaging, SDK persistent và laptop-side Docker/LAN telemetry validation đã PASS ngày 2026-09-30; physical-phone integration chưa có thiết bị để kiểm tra. Workstream dùng **ReactJS + Capacitor**, không phải React Native. B chịu trách nhiệm toolchain/packaging/integration; C tiếp tục sở hữu React UI. Checklist đầy đủ nằm trong [ROADMAP](../ROADMAP.md#m15-android-packaging).
+
+### B-MOB-01 — Environment và Android skeleton (ưu tiên tuần 1–2)
+
+- **Đầu ra:** Capacitor config, Android platform/Gradle wrapper, hướng dẫn Android Studio/SDK/adb/JDK.
+- **Tiêu chí nghiệm thu:** `npm` build React pass; Capacitor sync pass; Android project mở/build được; không chứa secret hoặc IP laptop hard-code.
+- **Trạng thái:** `[x] DONE` cho M1.5A — Capacitor 8.5.2, Android project, command-line SDK persistent, cap sync và Gradle debug build PASS trên JDK 21; APK 4.08 MiB tồn tại. Android Studio chưa cài nhưng không chặn command-line build.
+
+### B-MOB-02 — Physical phone + backend integration (ưu tiên tuần 2–3)
+
+- **Đầu ra:** Test build cài trên điện thoại Android thật; cấu hình REST/WebSocket base URL; log LAN integration.
+- **Tiêu chí nghiệm thu:** App mở được, gọi FastAPI qua URL LAN của Nginx dạng `http://<LAPTOP_LAN_IP>:<FRONTEND_LAN_PORT>/api`, thực hiện REST; khi có WebSocket/auth thì kiểm tra tương ứng. Chỉ dùng cổng FastAPI trực tiếp nếu được expose có chủ đích; `localhost` trên điện thoại không được dùng làm laptop backend.
+- **Trạng thái:** `[!] BLOCKED` — `adb` 37.0.1 hoạt động nhưng không có thiết bị kết nối. Nginx `/api` qua IP Wi-Fi runtime và simulator telemetry đã PASS từ laptop; chưa thể install/launch hoặc xác nhận API LAN từ app Android.
+
+### B-MOB-03 — Control flow và APK (ưu tiên tuần 4–7)
+
+- **Đầu ra:** Android app hiển thị telemetry/state và command result; app name/icon/splash nếu cần; debug APK và release APK khi sẵn sàng.
+- **Tiêu chí nghiệm thu:** Pump intent đi `React/Capacitor → FastAPI → MQTT → simulator` qua Docker/LAN cho M1.5, UI chỉ báo Applied sau ACK+state; final demo pass trên điện thoại thật. Khi ESP32 M2 sẵn sàng, chạy lại cùng contract với thiết bị thật. Cleartext chỉ giới hạn cho DEV, production hướng tới HTTPS/WSS; signing secret không commit.
+- **Trạng thái:** `[ ] TODO`.
 
 ## Tuần 2 — M2
 
@@ -43,18 +68,18 @@ Mục tiêu chung: ESP32 thật + sensor + relay/bơm; điện thoại điều k
 - **Đầu ra:** Schema/migration; thời điểm nhận; xử lý dữ liệu lỗi.
 - **Tiêu chí nghiệm thu:** Phân biệt sensor lỗi với giá trị 0; nhận dữ liệu thật; có last_seen và quy tắc stale; không đếm lặp telemetry nếu đã chốt khử trùng.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** `[~] IN PROGRESS` — schema, sensor error/null, receive time, stale và dedup đã có/test; dữ liệu ESP32 thật chưa có.
+- **Issue / PR / bằng chứng:** `backend/app/migrations/`, `backend/app/schemas.py`, `backend/app/repository.py`; backend 84/84 pass ngày 2026-09-29.
 
 ### B-W2-02 — Hoàn thiện vòng đời command và tích hợp thật
 
 - **Owner:** Tài. **Reviewer:** Toản. **Ước lượng:** 4 giờ.
 - **Phụ thuộc:** B-W1-02, G02.
-- **Đầu ra:** Command_id, TTL, ack/state và lịch sử.
+- **Đầu ra:** `command_id`, `expires_at` tuyệt đối, `target_boot_id`, ACK/state evidence và lịch sử.
 - **Tiêu chí nghiệm thu:** Timeout không tự ghi thành công; xử lý ack trễ; không replay lệnh bật đã hết hạn; Thành (A) dùng được contract với thiết bị thật.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
-- **Issue / PR / bằng chứng:** chưa có.
+- **Trạng thái:** `[~] IN PROGRESS` — lifecycle/late evidence/replay protection đã có với simulator và G02 đã AGREED; thiếu tích hợp ESP32 thật.
+- **Issue / PR / bằng chứng:** Backend E2E 33/33 trong tổng 84 tests; simulator 31/31 ngày 2026-09-29.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
 

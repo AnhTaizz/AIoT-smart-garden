@@ -1,5 +1,7 @@
 # Báo cáo dựng khung dự án — TASK-000A đến TASK-000E
 
+> **Historical snapshot:** báo cáo này ghi các bước bootstrap tại thời điểm thực hiện. Nhiều mục “chưa có” bên dưới đã được triển khai sau đó; current truth nằm trong [PROJECT_STATE](PROJECT_STATE.md) và [ROADMAP](ROADMAP.md).
+
 Ngày thực hiện: 2026-09-13.
 
 ## Phạm vi

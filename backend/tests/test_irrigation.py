@@ -10,7 +10,7 @@ import httpx
 from starlette.requests import Request
 import pytest
 from app import irrigation
-from app.irrigation import Policy, parse_proposal, check_observation
+from app.irrigation import Policy, parse_proposal, check_observation, decision_user_message, history_summary
 from app.auth import Session
 from app.config import Settings
 
@@ -201,8 +201,10 @@ def test_forecast_is_model_input_only_and_never_blocks_evaluation(policy, monkey
             app.state.chat_client = client
             await irrigation.evaluate(app, profile)
         body = json.loads(captured[0].content)
-        sent = json.loads(body["messages"][1]["content"])
-        assert sent["prompt_version"] == "irrigation-decision-v2"
+        content = body["messages"][1]["content"]
+        assert content.endswith(irrigation.FORMAT_REMINDER)
+        sent = json.loads(content.removesuffix(irrigation.FORMAT_REMINDER))
+        assert sent["prompt_version"] == irrigation.PROMPT_VERSION
         assert sent["weather"]["status"] == forecast
         assert "không bao giờ dùng thời tiết làm lý do để tưới" in body["messages"][0]["content"]
         if forecast == "fresh":
@@ -293,3 +295,30 @@ def test_auto_is_refused_without_a_decision_model(api):
     assert response.status_code == 503
     assert response.json()["detail"]["reason"] == "not_configured"
     api.bridge.publish.assert_not_called()
+
+
+def test_model_history_drops_nested_observations():
+    # Each stored observation embeds the previous history; passing it on made the
+    # prompt double every evaluation until the model server failed with 503.
+    rows = [{"id": i, "device_id": "node_01", "created_at": datetime.now(timezone.utc), "status": "error",
+             "reason": "AI lỗi", "proposal": None, "reserved_seconds": 0, "command_id": None,
+             "observation": {"history": [{"observation": "x" * 5000}]}, "command_status": None,
+             "device_ack": None, "confirmed_relay_state": None} for i in range(8)]
+    summary = history_summary(rows)
+    assert len(summary) == 5
+    assert all("observation" not in item and "device_ack" not in item for item in summary)
+    message = decision_user_message({"history": summary, "policy": {"max_pulse_seconds": 2}})
+    assert len(message) < 2000
+    nested = decision_user_message({"history": history_summary([{**rows[0], "observation": {"history": summary}}])})
+    assert len(nested) < 2000  # bounded no matter how many evaluations came before
+
+
+def test_decision_message_ends_with_the_json_format():
+    message = decision_user_message({"telemetry": {"soil_moisture_pct": 30}})
+    assert message.startswith('{"telemetry"')
+    assert message.rstrip().endswith('"reason":"Đất đủ ẩm"}')
+    # The reminder examples themselves are valid proposals the parser accepts.
+    for example in ('{"water":true,"duration_seconds":5,"reason":"Đất khô dưới ngưỡng"}',
+                    '{"water":false,"duration_seconds":0,"reason":"Đất đủ ẩm"}'):
+        assert example in message
+        parse_proposal(example)

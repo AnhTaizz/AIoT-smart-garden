@@ -168,6 +168,15 @@ async function apiFetch(
   }
 }
 
+export async function irrigationRequest<T>(deviceId: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  // apiFetch adds the Bearer token, the 10 s timeout and the 401 handling; PUT is never retried.
+  return handleResponse<T>(await apiFetch(`${apiBaseUrl}/devices/${encodeURIComponent(deviceId)}/irrigation`, {
+    method: body === undefined ? "GET" : "PUT", signal,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }));
+}
+
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;

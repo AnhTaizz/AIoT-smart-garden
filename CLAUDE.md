@@ -44,7 +44,10 @@ ESP32-CAM -> backend -> image/AI -> backend/ReactJS                 (phase sau)
   vi an toàn khi boot, mất mạng hoặc sensor lỗi.
 - Backend kiểm tra/chuyển lệnh, lưu dữ liệu và cung cấp API; không tạo một bộ
   logic tự tưới thứ hai cạnh tranh với ESP32.
-- AI chỉ cung cấp thông tin/cảnh báo, không trực tiếp bật bơm.
+- Chatbot chỉ tư vấn. Theo yêu cầu mới, supervisor AI có thể đề xuất tưới trên simulator qua lớp kiểm tra và command/ACK/state; xem docs/AI_IRRIGATION.md. AUTO phần cứng thật chưa được bật, ESP32 vẫn giữ giới hạn an toàn cục bộ.
+  Dòng này mâu thuẫn với dòng "không tạo bộ logic tự tưới thứ hai" ở trên; kiến trúc
+  Auto **chưa chốt** (xem `docs/INTERFACES.md` mục Ranh giới xử lý). Không mở rộng
+  supervisor sang thiết bị thật hoặc thêm Auto vào firmware trước khi nhóm quyết định.
 - Firmware phải mặc định bơm tắt khi boot, tự dừng theo giới hạn cục bộ và không
   chạy lại lệnh cũ sau reconnect. Không suy đoán pin, cực kích relay hoặc ngưỡng
   an toàn khi BOM/G03 chưa được chốt.

@@ -16,6 +16,7 @@ from . import repository
 from .access import ControlAccess, control_access
 from .auth import AUTH_ERRORS, OperatorDep, SessionDep, limiters, rate_limited, router as auth_router
 from .chat import CHAT_ERRORS, router as chat_router
+from . import irrigation
 from .config import Settings
 from .http_config import configure_cors
 from .db import apply_migrations, create_pool
@@ -107,6 +108,7 @@ async def _run_background(app: FastAPI) -> None:
     await asyncio.gather(
         consume(app.state.queue, MessageHandler(app.state.pool)),
         _sweep_timeouts(app),
+        irrigation.run(app),
     )
 
 
@@ -121,6 +123,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.bridge = MqttBridge(settings, asyncio.get_running_loop(), app.state.queue)
     background = asyncio.create_task(_run_background(app))
     app.state.chat_client = httpx.AsyncClient(follow_redirects=False)
+    app.state.issue_irrigation_command = issue_command
     try:
         yield
     finally:
@@ -135,6 +138,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Smart Garden API", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(irrigation.router)
 configure_cors(app, Settings.from_env())
 
 
@@ -288,13 +292,25 @@ def _iso(value: datetime) -> str:
 async def create_command(
     device_id: DevicePath, body: CommandCreate, request: Request, _session: OperatorDep
 ) -> dict[str, Any]:
+    async with irrigation.device_lock(request.app.state.pool, device_id) as conn:
+        await irrigation.disable(conn, device_id)
+        if body.action == "pump_on":
+            await conn.execute("UPDATE irrigation_profile SET last_attempt=now() WHERE device_id=%s", (device_id,))
+            await conn.commit()
+        return await issue_command(device_id, body, request)
+
+
+async def issue_command(
+    device_id: str, body: CommandCreate, request: Request, command_id=None
+) -> dict[str, Any]:
     """Queue a command for the device.
 
     202 only means the backend stored and published the request; the command
     stays `pending` until the device proves what it did or the deadline passes.
     """
-    # Authentication/authorization ran first (OperatorDep): anonymous gets 401,
-    # a viewer 403, before any command row is created or anything is published.
+    # HTTP callers reach this only through create_command, whose OperatorDep ran
+    # first (anonymous 401, viewer 403) before any row is created or published.
+    # The simulator-only irrigation supervisor calls it internally.
     settings: Settings = request.app.state.settings
     bridge: MqttBridge = request.app.state.bridge
     if (
@@ -333,7 +349,7 @@ async def create_command(
         command_sequence = await repository.allocate_command_sequence(conn, device_id)
         command = await repository.insert_command(
             conn,
-            uuid4(),
+            command_id or uuid4(),
             device_id,
             command_sequence,
             body.action,

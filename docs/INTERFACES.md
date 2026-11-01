@@ -10,12 +10,17 @@ ON cục bộ 60 giây (API vẫn cho phép tới 120; board từ chối `>60` b
 mặc định dry-run/control-disabled và **không có** chế độ AUTO. Xem
 [báo cáo tích hợp firmware](FIRMWARE_INTEGRATION.md).
 
-**Xung đột kiến trúc Auto — CHƯA CHỐT (ghi nhận 2026-11-01):** [AGENTS.md](../AGENTS.md)
-của nhánh firmware mô tả AI Server quyết định tưới, ESP32 chỉ đo/thực thi/bảo vệ;
-đoạn ngay dưới, CLAUDE.md và kế hoạch [W3](W3_WEATHER_LOCAL_EXECUTION_PLAN.md) mô tả ESP32
-sở hữu Manual/Auto và backend không tạo logic tự tưới thứ hai. Hiện **không có** Auto ở
-cả server lẫn firmware; chỉ có lệnh thủ công `pump_on`/`pump_off` của operator. Không
-triển khai Auto/Weather cho tới khi Thành, Tài và Toản chọn một hướng và cập nhật mục này.
+**Supervisor tưới AI cho simulator (PR #9, đã merge vào `main` 2026-11-01):** xem [AI_IRRIGATION](AI_IRRIGATION.md). Backend tự đánh giá theo chu kỳ, gọi model, validate JSON và có thể phát `pump_on` qua đúng đường command/ACK/state G02 (cùng `command_id`, QoS 1, không retained). Chỉ chạy khi telemetry `simulated: true`; AUTO mặc định tắt và tự tắt sau backend restart, lỗi AI/API hoặc lệnh tay. REST `GET /devices/{id}/irrigation` cần phiên hợp lệ; `PUT` cần role `operator` (bật AUTO cho phép supervisor phát ON, tắt AUTO phát `pump_off`): anonymous `401`, viewer `403`. Chatbot `/chat` vẫn chỉ tư vấn.
+
+**Xung đột kiến trúc Auto — CHƯA CHỐT (ghi nhận 2026-11-01):** repo hiện chứa ba hướng không tương thích:
+
+| Hướng | Nguồn | Ai quyết định tưới |
+| --- | --- | --- |
+| ESP32 sở hữu Manual/Auto; backend không tạo bộ tự tưới thứ hai | Đoạn ngay dưới, CLAUDE.md §3, kế hoạch [W3](W3_WEATHER_LOCAL_EXECUTION_PLAN.md) | Firmware (hysteresis cục bộ); weather chỉ được hoãn |
+| AI Server quyết định, ESP32 chỉ đo/thực thi/bảo vệ | [AGENTS.md](../AGENTS.md) của nhánh firmware | Server |
+| Supervisor AI phía backend, giới hạn simulator | PR #9 / [AI_IRRIGATION](AI_IRRIGATION.md) | Backend + model, có kiểm tra/ngân sách |
+
+Trạng thái an toàn hiện tại: firmware **không** có AUTO; supervisor PR #9 chặn `simulated: false` nên không thể tưới phần cứng thật; Weather chưa có code. Không mở AUTO cho thiết bị thật, không thêm Auto vào firmware và không nối Weather vào supervisor cho tới khi Thành, Tài và Toản chọn một hướng và cập nhật mục này.
 
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
 

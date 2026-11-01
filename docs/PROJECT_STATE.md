@@ -1,5 +1,15 @@
 # Trạng thái dự án
 
+## Trạng thái hợp nhất — 2026-11-01
+
+Nhánh `integration/smart-garden-unified-20261101` gom BC-01, BC-02, W3 (docs), firmware Arduino IDE, phần còn thiếu của PR #4 (G02 AGREED docs, REMOTE_DEMO, iOS) và PR #9 (supervisor tưới AI cho simulator, nay cần đăng nhập). Chi tiết, conflict và việc cần làm: [INTEGRATION_REPORT_2026-11-01](INTEGRATION_REPORT_2026-11-01.md).
+
+- **Kiểm thử bản tích hợp: NOT TESTED** (để sau E2E theo yêu cầu chủ dự án). Số liệu test trong các mục khác là của từng nhánh trước khi hợp nhất.
+- **Stack demo đang chạy là bản trước BC-02**: API công khai qua `garden-api.anhtaizz.id.vn` chưa có xác thực. Chưa redeploy vì `.env` chưa có tài khoản operator.
+- Domain: `garden` và `garden-api` hoạt động qua Named Tunnel `garden-local`; apex chưa có route; TOEIC trả 502 từ trước, không thuộc phạm vi.
+- Kiến trúc Auto **chưa chốt** (ESP32 / server / supervisor PR #9); xem [INTERFACES](INTERFACES.md#ranh-giới-xử-lý). Weather W3 chưa có code.
+- Firmware: Arduino IDE dry-run mặc định, chưa nghiệm thu board; nhánh PlatformIO A-W1 chưa hợp nhất.
+
 ## Trạng thái Cloudflare + Remote Mobile — 2026-10-06
 
 **MANUAL DEVICE TEST — User-confirmed on physical Android device (2026-10-06, Asia/Bangkok).** Người dùng xác nhận APK cài/chạy trên Android thật, tắt Wi-Fi và dùng 4G/5G; telemetry/state, pump ON/OFF, Web/App shared state và ACK + state lifecycle đều PASS. Đây là **USER-CONFIRMED MANUAL TEST**, không phải automated test; không suy ra phone browser 4G, network recovery, iOS hoặc phần cứng ESP32 đã được kiểm thử. iOS architecture/config READY; build/runtime NOT TESTED. Regression và kết luận đóng phase: [REMOTE_MOBILE_REPORT](REMOTE_MOBILE_REPORT_2026-10-06.md). Firmware/hardware, camera/AI và production deployment còn mở.
@@ -125,3 +135,4 @@ Chủ dự án yêu cầu tích hợp dự báo thời tiết để hỗ trợ *
 Thực thi chuyển sang Claude Code trên máy local. Bước đầu tiên bắt buộc là **audit read-only**: git status/branch/HEAD/PR #6/#7, dirty worktree, công cụ Docker/Python/Node/Android SDK/adb và thiết bị; sau đó mới xác minh test baseline. Local tốt hơn về khả năng test APK/thiết bị nhưng **không tự động đồng nghĩa đã test**.
 
 Snapshot GitHub đã kiểm tra 2026-10-31: main `13e1ac0`, PR #6 Draft head `57f78b6`, PR #7 Draft stacked head `1a3db7b`. Theo báo cáo PR #7: 215 backend pass, 2 Kaggle skip; 31 simulator; 73 frontend; build/sync OK. Chưa có chứng cứ APK/điện thoại/Cloudflare tunnel/Kaggle/ESP32 thật ở BC-02.1. Không rebase/merge/force push hoặc cập nhật mốc nghiệm thu khi chưa kiểm tra lại bằng chứng.
+- 2026-11-01: hợp nhất các nhánh trên `integration/smart-garden-unified-20261101`, chuẩn hóa domain `anhtaizz.id.vn`, gắn xác thực cho API irrigation của PR #9. Chưa chạy test; không đổi trạng thái milestone.

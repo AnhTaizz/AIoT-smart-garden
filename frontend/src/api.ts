@@ -514,6 +514,115 @@ export async function fetchControlAccess(signal?: AbortSignal): Promise<ControlA
   return parseControlAccess(await handleResponse<unknown>(response));
 }
 
+export type WeatherStatus = "fresh" | "stale" | "unavailable" | "disabled";
+
+export interface WeatherHour {
+  time: string;
+  precipitation_probability_pct: number | null;
+  precipitation_mm: number | null;
+  temperature_c: number | null;
+}
+
+export interface WeatherSummary {
+  window_start: string;
+  window_end: string;
+  hours_in_window: number;
+  hours_with_data: number;
+  /** Highest hourly probability, not the chance of rain over the window. */
+  max_precipitation_probability_pct: number | null;
+  total_precipitation_mm: number | null;
+}
+
+export interface WeatherData {
+  status: WeatherStatus;
+  reason: string | null;
+  message: string | null;
+  fetched_at: string | null;
+  valid_until: string | null;
+  summary: WeatherSummary | null;
+  hours: WeatherHour[];
+  attribution: string;
+  attribution_url: string;
+}
+
+const WEATHER_STATUSES: readonly string[] = ["fresh", "stale", "unavailable", "disabled"];
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
+function parseWeatherHour(value: unknown): WeatherHour {
+  if (
+    isRecord(value) && typeof value.time === "string" &&
+    isNullableNumber(value.precipitation_probability_pct) &&
+    isNullableNumber(value.precipitation_mm) && isNullableNumber(value.temperature_c)
+  ) {
+    return {
+      time: value.time,
+      precipitation_probability_pct: value.precipitation_probability_pct,
+      precipitation_mm: value.precipitation_mm,
+      temperature_c: value.temperature_c,
+    };
+  }
+  throw new Error("Dữ liệu dự báo theo giờ không hợp lệ.");
+}
+
+function parseWeatherSummary(value: unknown): WeatherSummary | null {
+  if (value === null) return null;
+  if (
+    isRecord(value) && typeof value.window_start === "string" && typeof value.window_end === "string" &&
+    typeof value.hours_in_window === "number" && typeof value.hours_with_data === "number" &&
+    isNullableNumber(value.max_precipitation_probability_pct) && isNullableNumber(value.total_precipitation_mm)
+  ) {
+    return {
+      window_start: value.window_start,
+      window_end: value.window_end,
+      hours_in_window: value.hours_in_window,
+      hours_with_data: value.hours_with_data,
+      max_precipitation_probability_pct: value.max_precipitation_probability_pct,
+      total_precipitation_mm: value.total_precipitation_mm,
+    };
+  }
+  throw new Error("Tóm tắt dự báo không hợp lệ.");
+}
+
+/** Parse GET /weather strictly; null stays null and is never shown as 0. */
+export function parseWeather(body: unknown): WeatherData {
+  if (
+    !isRecord(body) || typeof body.status !== "string" || !WEATHER_STATUSES.includes(body.status) ||
+    !isNullableString(body.reason) || !isNullableString(body.message) ||
+    !isNullableString(body.fetched_at) || !isNullableString(body.valid_until) ||
+    !Array.isArray(body.hours) || typeof body.attribution !== "string" || typeof body.attribution_url !== "string"
+  ) {
+    throw new Error("Phản hồi dự báo thời tiết không hợp lệ.");
+  }
+  return {
+    status: body.status as WeatherStatus,
+    reason: body.reason,
+    message: body.message,
+    fetched_at: body.fetched_at,
+    valid_until: body.valid_until,
+    summary: parseWeatherSummary(body.summary ?? null),
+    hours: body.hours.map(parseWeatherHour),
+    attribution: body.attribution,
+    attribution_url: body.attribution_url,
+  };
+}
+
+/** Read the backend's cached Open-Meteo forecast (advisory, never a measurement). */
+export async function fetchWeather(signal?: AbortSignal): Promise<WeatherData> {
+  const response = await apiFetch(`${apiBaseUrl}/weather`, {
+    signal,
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  return parseWeather(await handleResponse<unknown>(response));
+}
+
 /** Log in; the password is sent once and never kept. */
 export async function login(username: string, password: string): Promise<AuthSession> {
   const response = await apiFetch(`${apiBaseUrl}/auth/login`, {

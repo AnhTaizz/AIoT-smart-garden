@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import ChatAssistant from "./ChatAssistant";
 import IrrigationPanel from "./IrrigationPanel";
+import WeatherCard from "./WeatherCard";
 import LoginScreen from "./LoginScreen";
 import {
   clearSession,
@@ -1038,7 +1039,7 @@ function Dashboard({ session }: { session: AuthSession }) {
           </article>
         </section>
       </main>
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px' }}><IrrigationPanel deviceId={deviceId} /></div>
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px' }}><WeatherCard /><IrrigationPanel deviceId={deviceId} /></div>
 
       <footer>
         <span>Smart Garden — AIoT Dashboard</span>

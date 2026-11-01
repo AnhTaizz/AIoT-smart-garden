@@ -6,6 +6,7 @@ interface Policy {
   max_pulse_seconds: number; cooldown_seconds: number; daily_budget_seconds: number; evaluation_seconds: number;
 }
 interface Data {
+  execution_scope: "simulator_only" | "real_device";
   profile: { enabled: boolean; policy: Policy; last_status: string } | null;
   decisions: { id: string; created_at: string; status: string; reason: string; proposal: { water: boolean; duration_seconds: number; reason: string } | null; command_status: string | null; command_id: string | null; confirmed_relay_state: string | null }[];
 }
@@ -15,31 +16,44 @@ export default function IrrigationPanel({ deviceId }: { deviceId: string }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [realConfirmed, setRealConfirmed] = useState(false);
+  const generation = useRef(0);
+  const actionPending = useRef(false);
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
     const controller = new AbortController();
+    generation.current += 1;
+    actionPending.current = false;
+    setData(null); setConnected(null); setRealConfirmed(false); setError(""); setBusy(false);
     const load = async () => {
-      try { const value = await irrigationRequest<Data>(deviceId, undefined, controller.signal); if (!controller.signal.aborted) { setData(value); setConnected(true); } }
-      catch { if (!controller.signal.aborted) setConnected(false); }
+      if (actionPending.current) return;
+      const current = generation.current;
+      try { const value = await irrigationRequest<Data>(deviceId, undefined, controller.signal); if (!controller.signal.aborted && current === generation.current) { setData(value); setConnected(true); } }
+      catch { if (!controller.signal.aborted && current === generation.current) setConnected(false); }
     };
     void load();
     const timer = window.setInterval(load, 5000);
     return () => { controller.abort(); window.clearInterval(timer); };
   }, [deviceId]);
+  const realDevice = data?.execution_scope === "real_device";
+  const knownScope = realDevice || data?.execution_scope === "simulator_only";
   const submit = async (enabled: boolean) => {
+    if (enabled && (connected !== true || !knownScope || (realDevice && !realConfirmed))) return;
     if (!form.current?.reportValidity()) return;
     const values = new FormData(form.current);
     const policy = Object.fromEntries([...values.entries()].map(([key, value]) => [key, ["crop", "stage", "substrate"].includes(key) ? value : Number(value)]));
     setBusy(true); setError("");
-    try { setData(await irrigationRequest<Data>(deviceId, { enabled, policy })); }
-    catch (err) { setError(err instanceof Error ? err.message : "Không đổi được chế độ."); }
-    finally { setBusy(false); }
+    actionPending.current = true;
+    const current = ++generation.current;
+    try { const value = await irrigationRequest<Data>(deviceId, { enabled, policy }); if (current === generation.current) { setData(value); setRealConfirmed(false); } }
+    catch (err) { if (current === generation.current) setError(err instanceof Error ? err.message : "Không đổi được chế độ."); }
+    finally { if (current === generation.current) { setBusy(false); actionPending.current = false; } }
   };
   return <section className="detail-card" style={{ marginTop: 24 }} aria-label="Điều phối tưới AI">
-    <p className="eyebrow">ĐIỀU PHỐI TƯỚI AI · THỬ NGHIỆM SIMULATOR</p>
+    <p className="eyebrow">ĐIỀU PHỐI TƯỚI AI · {realDevice ? "ESP32 THẬT" : knownScope ? "SIMULATOR" : "CHƯA XÁC NHẬN THIẾT BỊ"}</p>
     <h2>{connected !== true ? "Chưa xác nhận trạng thái AUTO" : data?.profile?.enabled ? "AUTO đang bật" : "MANUAL — AUTO đang tắt"}</h2>
     {connected === false && <p role="status">Không lấy được trạng thái điều phối. Thông tin bên dưới có thể đã cũ; hãy kiểm tra kết nối backend.</p>}
-    <p>AI đánh giá theo chu kỳ; backend kiểm tra giới hạn rồi mới gửi lệnh. Phiên bản này chưa cho phép điều khiển bơm thật. Chế độ thiết bị ở phía trên vẫn là trạng thái thiết bị tự báo.</p>
+    <p>AI quyết định tưới trên server; ESP32 đọc cảm biến, thực thi lệnh và tự giới hạn thời gian bơm. {realDevice ? "AUTO có thể bật bơm thật khi bạn chủ động cho phép; cần giám sát trong phiên thử nghiệm." : "AUTO cho ESP32 thật cần được cấp quyền riêng trên server; không dùng simulator cùng ID với board."} Chế độ thiết bị vẫn là trạng thái thiết bị tự báo.</p>
     <form ref={form} onSubmit={event => { event.preventDefault(); void submit(true); }} key={deviceId + Boolean(data?.profile)}>
       <fieldset disabled={busy || data?.profile?.enabled} style={{ border: "1px solid #dbe4df", borderRadius: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 14, padding: 16 }}>
         <legend>Cấu hình cho cây/giá thể đang thử nghiệm</legend>
@@ -52,13 +66,19 @@ export default function IrrigationPanel({ deviceId }: { deviceId: string }) {
           ['evaluation_seconds', 'Chu kỳ đánh giá (giây)', 30, 3600],
         ] as const).map(([key, title, min, max]) => <label key={key}>{title}<input name={key} type="number" required min={min} max={max} step={key === 'moisture_stop_pct' ? 'any' : 1} defaultValue={data?.profile?.policy[key] ?? ""} style={{ width: "100%" }} /></label>)}
       </fieldset>
+      {realDevice && !data?.profile?.enabled && <label style={{ display: "block", marginTop: 16 }}>
+        <input type="checkbox" checked={realConfirmed} disabled={busy} onChange={event => setRealConfirmed(event.target.checked)} />
+        Đã hiệu chuẩn cảm biến, kiểm tra OFF với adapter bơm rút và sẵn sàng giám sát ESP32 thật.
+      </label>}
       <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-        <button type="submit" disabled={busy || Boolean(data?.profile?.enabled)}>Bật AUTO (simulator)</button>
+        <button type="submit" disabled={busy || connected !== true || !knownScope || Boolean(data?.profile?.enabled) || (realDevice && !realConfirmed)}>{realDevice ? "Bật AUTO (ESP32 thật)" : knownScope ? "Bật AUTO (simulator)" : "Bật AUTO"}</button>
         <button type="button" disabled={busy || !data?.profile?.enabled} onClick={async () => {
           setBusy(true); setError("");
-          try { setData(await irrigationRequest<Data>(deviceId, { enabled: false, policy: data?.profile?.policy })); }
-          catch (err) { setError(err instanceof Error ? err.message : "Không đổi được chế độ."); }
-          finally { setBusy(false); }
+          actionPending.current = true;
+          const current = ++generation.current;
+          try { const value = await irrigationRequest<Data>(deviceId, { enabled: false, policy: data?.profile?.policy }); if (current === generation.current) { setData(value); setRealConfirmed(false); } }
+          catch (err) { if (current === generation.current) setError(err instanceof Error ? err.message : "Không đổi được chế độ."); }
+          finally { if (current === generation.current) { setBusy(false); actionPending.current = false; } }
         }}>Chuyển MANUAL và gửi STOP</button>
       </div>
     </form>

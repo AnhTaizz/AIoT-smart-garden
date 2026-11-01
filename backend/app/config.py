@@ -1,5 +1,6 @@
 import os
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -9,6 +10,14 @@ def _int_env(name: str, default: int, minimum: int = 1) -> int:
     if value < minimum:
         raise ValueError(f"{name} must be >= {minimum}")
     return value
+
+
+def _real_device_ids() -> tuple[str, ...]:
+    values = tuple(dict.fromkeys(value.strip() for value in
+                                os.getenv("IRRIGATION_REAL_DEVICE_IDS", "").split(",") if value.strip()))
+    if any(not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value) for value in values):
+        raise ValueError("IRRIGATION_REAL_DEVICE_IDS must contain device IDs, not MQTT paths or wildcards")
+    return values
 
 
 @dataclass(frozen=True)
@@ -32,6 +41,7 @@ class Settings:
     chat_temperature: float = 0.7
     chat_max_tokens: int = 1024
     chat_timeout_seconds: int = 120
+    irrigation_real_device_ids: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -63,6 +73,7 @@ class Settings:
             chat_temperature=temperature,
             chat_max_tokens=_int_env("CHAT_MAX_TOKENS", 1024),
             chat_timeout_seconds=_int_env("CHAT_TIMEOUT_SECONDS", 120),
+            irrigation_real_device_ids=_real_device_ids(),
         )
 
     def database_connection_parameters(self) -> dict[str, Any]:

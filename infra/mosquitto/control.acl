@@ -1,0 +1,12 @@
+user esp32_node_01
+topic read garden/node_01/control
+topic write garden/node_01/telemetry
+topic write garden/node_01/ack
+topic write garden/node_01/state
+
+user garden_backend
+topic write healthcheck
+topic write garden/+/control
+topic read garden/+/telemetry
+topic read garden/+/ack
+topic read garden/+/state

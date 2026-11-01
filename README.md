@@ -12,6 +12,10 @@ Nhánh `finetuneAI` tích hợp trợ lý nông nghiệp Qwen3-8B qua API Kaggle
 
 ## Bắt đầu từ đâu?
 
+Để chuyển sang board đang lắp, xem [chạy ESP32 thật với AI Server](docs/ESP32_REAL_SETUP.md):
+`node_01` được cấu hình riêng cho dữ liệu thật; bật AUTO vẫn cần cấu hình broker,
+hiệu chuẩn và thao tác chủ động của người giám sát. Không dùng simulator cùng ID.
+
 Firmware ESP32 hiện có trong [firmware](firmware/README.md), mặc định dry-run và khóa
 điều khiển. Xem [báo cáo đối chiếu phần cứng/tích hợp MQTT](docs/FIRMWARE_INTEGRATION.md)
 cho kết quả phần mềm, khoảng trống AI quyết định tưới và quy trình kiểm tra bắt đầu

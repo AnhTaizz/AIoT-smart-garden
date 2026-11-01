@@ -1,5 +1,11 @@
 # Kiểm tra repository và tích hợp ESP32 — 2026-11-01
 
+**Cập nhật chuyển ESP32 thật:** supervisor đã có quyền AUTO theo device ID và
+giao diện đã phân biệt `real_device`/`simulator_only`. Xem
+[quy trình cấu hình và kết quả test](ESP32_REAL_SETUP.md). Các nhận định về việc
+chỉ cho simulator bên dưới là lịch sử trước thay đổi này. Chưa bật AUTO, nạp board
+hay thử bơm thật; cấu hình/hiệu chuẩn và nghiệm thu vẫn cần hoàn tất.
+
 **Cập nhật sau merge main `0b039d6`:** repository đã có
 [supervisor AI tưới](AI_IRRIGATION.md), API cấu hình và migration `004_irrigation.sql`.
 Supervisor hiện chỉ cho simulator, chặn số đo `simulated:false`, giữ MQTT v1 và

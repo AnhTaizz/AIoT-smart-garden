@@ -58,10 +58,18 @@ Local: nhánh `feat/remote-mobile-cloudflare` có 3 commit chưa push (merge `ma
 
 Không có quyền Cloudflare API trong phiên này; không tạo tunnel, không sửa route/DNS, không restart connector nào.
 
+## 5a. Deploy lên stack demo — 2026-11-01 (sau khi chủ dự án đồng ý)
+
+- Tạo tài khoản operator `admin` (hash scrypt trong `.env`; `.env` cũ sao lưu ở `.env.bak`, cả hai bị Git ignore). Mật khẩu chỉ đưa cho chủ dự án, không ghi vào repo.
+- Build frontend lần đầu fail vì `npm test` trong Dockerfile: 3 test polling của `App.test.tsx` bắt nhầm interval 5 giây của `IrrigationPanel`. Đã mock panel trong file test đó (panel có test riêng). Vitest **75/75 PASS**.
+- `up --build -d` (không `-v`): migration `004_auth_sessions`, `004_irrigation` được áp dụng; bốn container healthy; connector `garden-local` vẫn nối được.
+- Kiểm tra qua domain thật: `garden` `/`, `/api/health`, `/api/ready` và `garden-api` `/health`, `/ready` → 200; anonymous `latest`, `irrigation`, `POST commands` → **401**; đăng nhập `admin` → operator, `latest` 200, `control-access` cho phép; logout → token cũ 401. Không gửi lệnh bơm.
+- Các test khác (backend unit/E2E, simulator, firmware, APK, điện thoại 4G) vẫn **NOT TESTED**.
+
 ## 6. Bảo mật — vấn đề mở
 
-1. **NGHIÊM TRỌNG — stack đang chạy là bản trước BC-02.** Container backend build 2026-10-06; OpenAPI công khai không có `/auth`; `GET /devices/node_01/latest` trả 200 cho người lạ qua `garden-api`. Theo tài liệu PR #4, `POST /devices/{id}/commands` cũng không cần xác thực. Hiện không có thiết bị online (telemetry cuối 2026-10-06, `simulated: true`), nên chưa có rủi ro bơm vật lý, nhưng **không kết nối ESP32 bật điều khiển** cho tới khi deploy bản này.
-2. **Blocker deploy:** `.env` chưa có `OPERATOR_USERNAME`/`OPERATOR_PASSWORD_HASH`. Bản BC-02 sẽ từ chối mọi đăng nhập (fail closed) cho tới khi chủ dự án tự tạo hash.
+1. **Đã xử lý ở §5a (2026-11-01).** Trước khi deploy, stack đang chạy là bản trước BC-02. Container backend build 2026-10-06; OpenAPI công khai không có `/auth`; `GET /devices/node_01/latest` trả 200 cho người lạ qua `garden-api`. Theo tài liệu PR #4, `POST /devices/{id}/commands` cũng không cần xác thực. Hiện không có thiết bị online (telemetry cuối 2026-10-06, `simulated: true`), nên chưa có rủi ro bơm vật lý, nhưng **không kết nối ESP32 bật điều khiển** cho tới khi deploy bản này.
+2. **Đã xử lý ở §5a.** Trước đó `.env` chưa có `OPERATOR_USERNAME`/`OPERATOR_PASSWORD_HASH`. Bản BC-02 sẽ từ chối mọi đăng nhập (fail closed) cho tới khi chủ dự án tự tạo hash.
 3. Mosquitto đang bind `0.0.0.0:1883` anonymous (`compose.device.yaml`). `compose.secure.yaml` có auth/ACL nhưng simulator chưa hỗ trợ credential.
 4. Connector `garden-local` nhận token qua command line (`docker inspect` thấy được) và được nối tay vào network Compose; `docker compose down` sẽ làm domain 502. `compose.tunnel.yaml` là phương án thay thế, chưa áp dụng.
 5. Supervisor PR #9 gửi telemetry/policy tới `CHAT_API_URL` (Kaggle/ngrok); dữ liệu vườn rời khỏi laptop khi AUTO bật.

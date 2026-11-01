@@ -4,6 +4,10 @@ import App, { mergeCommands } from "./App";
 import type { CommandOut } from "./api";
 import { clearSession, setSession } from "./auth";
 
+// The irrigation panel polls on its own 5 s interval, which would be captured by
+// capturePollTicks instead of the dashboard poll; it is covered by IrrigationPanel.test.tsx.
+vi.mock("./IrrigationPanel", () => ({ default: () => null }));
+
 // Dashboard tests run as a logged-in operator; login flows are in auth.test.tsx.
 beforeEach(() => {
   setSession({ token: "test-token-0123456789abcdef", username: "operator", role: "operator", expiresAt: Date.now() + 3_600_000 });

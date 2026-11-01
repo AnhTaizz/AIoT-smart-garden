@@ -1,4 +1,9 @@
-"""Agriculture advice via the custom Kaggle API; no device control tools."""
+"""Agriculture advice via the custom Kaggle API.
+
+The model never controls the pump. Explicit operator commands ("bật bơm 20 giây",
+"tắt bơm") are parsed deterministically and sent through the same path as the
+dashboard button, without calling the model.
+"""
 
 import asyncio
 import json
@@ -18,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from . import repository, weather
 from .auth import SessionDep, limiters, rate_limited
-from .schemas import DEVICE_ID_PATTERN
+from .schemas import CommandCreate, CommandOut, DEVICE_ID_PATTERN
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -111,7 +116,10 @@ class ChatResponse(BaseModel):
     reply: str
     context: GardenContext
     prompt_version: str
-    reply_source: Literal["model", "garden_facts"] = "model"
+    reply_source: Literal["model", "garden_facts", "device_command"] = "model"
+    # Present only when a chat command was published; still pending until the
+    # device ACK/state confirms it, exactly like the dashboard button.
+    command: CommandOut | None = None
 
 
 async def load_context(request: Request, body: ChatRequest) -> GardenContext:
@@ -237,8 +245,9 @@ def render_question(body: ChatRequest, context: GardenContext) -> str:
         + "\n".join(garden_fact_lines(context))
         + "\nQUY TẮC TRẢ LỜI: Không bịa số đo, giờ đo hoặc mực nước bồn. "
         "null/error là không biết, stale là dữ liệu cũ, simulated là mô phỏng. "
-        "Không suy ra cây thiếu nước từ cảm biến lỗi. Không có quyền điều khiển bơm; "
-        "không nói đã bật/tắt bơm. Nếu được yêu cầu điều khiển, hướng dẫn bảng điều khiển. "
+        "Không suy ra cây thiếu nước từ cảm biến lỗi. Bạn không điều khiển bơm; "
+        "không nói đã bật/tắt bơm. Nếu được yêu cầu điều khiển, hướng dẫn gõ "
+        "'bật bơm 10 giây' hoặc 'tắt bơm', hoặc dùng bảng điều khiển. "
         "Nêu nguyên nhân có thể, bước kiểm tra và hỏi loại cây/giá thể nếu còn thiếu. "
         "Chỉ xuất lời tư vấn, không lặp lại câu hỏi hay các quy tắc trên. /no_think"
     )
@@ -307,11 +316,93 @@ def guard_reply(reply: str, context: GardenContext) -> tuple[str, Literal["model
         *garden_fact_lines(context),
     ]
     lines += [
-        "", "Chatbot chỉ tư vấn, **không thực hiện bật/tắt bơm**. Bạn thao tác tại bảng điều khiển và kiểm tra xác nhận của thiết bị.",
+        "", "Câu trả lời tư vấn **không bật/tắt bơm**. Để điều khiển, gõ rõ lệnh như \"bật bơm 10 giây\" hoặc \"tắt bơm\" (tài khoản điều khiển), hoặc dùng bảng điều khiển, rồi kiểm tra xác nhận của thiết bị.",
         "", "Trước khi tưới, hãy kiểm tra ẩm thực tế và khả năng thoát nước. Bạn đang trồng cây gì, ở giai đoạn nào và dùng giá thể nào?",
     ]
     logger.warning("Chat answer replaced with garden facts after unsupported device claim")
     return "\n".join(lines), "garden_facts"
+
+
+CHAT_PUMP_DEFAULT_SECONDS = 10
+_PUMP = r"(?:máy\s+|may\s+)?(?:bơm|bom)\b"
+_ON = re.compile(r"\b(?:bật|mở|chạy|tưới|bat|mo|chay|tuoi)\b(?:\s+\S+){0,3}?\s+" + _PUMP)
+_OFF = re.compile(r"\b(?:tắt|dừng|ngắt|ngừng|tat|dung|ngat|ngung)\b(?:\s+\S+){0,3}?\s+" + _PUMP)
+# "dung" without diacritics before an ON verb reads as "đừng" (don't).
+_NEGATION = re.compile(r"\b(?:đừng|không|chưa|chớ|khong|chua)\b|\bdung\s*$")
+_QUESTION = re.compile(
+    r"\?|\b(?:có nên|nên|khi nào|bao lâu|tại sao|vì sao|làm sao|thế nào|co nen|nen|khi nao|bao lau|tai sao|vi sao|lam sao|the nao)\b"
+    r"|\b(?:không|chưa|khong|chua)\s*[.!]*\s*$"
+)
+_DURATION = re.compile(r"(\d{1,5})\s*(giây|giay|s|phút|phut)?\b")
+
+
+def parse_pump_intent(message: str) -> tuple[Literal["pump_on", "pump_off"], int | None] | None:
+    """Return an explicit pump command, or None to let the model advise.
+
+    Questions and negations are never commands. The model is not involved.
+    """
+    text = unicodedata.normalize("NFC", message.lower()).strip()
+    if _QUESTION.search(text):
+        return None
+    for action, pattern in (("pump_on", _ON), ("pump_off", _OFF)):
+        match = pattern.search(text)
+        if not match:
+            continue
+        if _NEGATION.search(text[:match.start()]):
+            return None
+        if action == "pump_off":
+            return action, None
+        duration = _DURATION.search(text, match.end())
+        if not duration:
+            return action, CHAT_PUMP_DEFAULT_SECONDS
+        seconds = int(duration.group(1))
+        return action, seconds * 60 if duration.group(2) in ("phút", "phut") else seconds
+    return None
+
+
+def command_error_text(error: HTTPException) -> str:
+    detail = error.detail if isinstance(error.detail, dict) else {"code": error.detail}
+    code = detail.get("code")
+    if code == "mqtt_unavailable":
+        return "Backend chưa kết nối MQTT broker nên chưa gửi được lệnh."
+    if code == "command_rate_limited":
+        return f"Bơm vừa được bật gần đây; thử lại sau {detail.get('retry_after_seconds', '?')} giây."
+    if code == "device_boot_unknown":
+        return "Thiết bị chưa báo trạng thái nên chưa gửi được lệnh bật."
+    if code == "backend_publish_failed":
+        return "Backend không publish được lệnh tới MQTT; lệnh không được gửi."
+    if isinstance(detail.get("message"), str):
+        return detail["message"]
+    return f"Không gửi được lệnh (HTTP {error.status_code})."
+
+
+async def run_pump_command(
+    request: Request, body: ChatRequest, session, action: str, seconds: int | None
+) -> ChatResponse:
+    context = await load_context(request, body)
+
+    def answer(text: str, command=None) -> ChatResponse:
+        return ChatResponse(reply=text, context=context, prompt_version=PROMPT_VERSION,
+                            reply_source="device_command", command=command)
+
+    label = f"bật bơm {seconds} giây" if action == "pump_on" else "tắt bơm"
+    if session.role != "operator":
+        return answer(f"Tài khoản xem không được {label}. Hãy đăng nhập bằng tài khoản điều khiển.")
+    limit = request.app.state.settings.command_max_duration_seconds
+    if seconds is not None and not 1 <= seconds <= limit:
+        return answer(f"Thời lượng bơm phải từ 1 đến {limit} giây; chưa gửi lệnh.")
+    try:
+        command = await request.app.state.manual_command(
+            body.device_id, CommandCreate(action=action, duration_seconds=seconds), request
+        )
+    except HTTPException as error:
+        return answer(f"Chưa {label}: {command_error_text(error)}")
+    note = " AI AUTO đã được tắt, giống khi bấm nút điều khiển." if action == "pump_on" else ""
+    return answer(
+        f"Đã gửi lệnh {label} tới `{body.device_id}`. Đang chờ thiết bị xác nhận; "
+        f"lệnh chỉ thành công khi thiết bị báo ACK/trạng thái.{note}",
+        CommandOut.model_validate(command),
+    )
 
 
 CHAT_NOT_CONFIGURED = (
@@ -326,6 +417,9 @@ async def chat(body: ChatRequest, request: Request, session: SessionDep) -> Chat
     wait = limiters(request).chat.hit(session.username)
     if wait is not None:
         raise rate_limited("chat_request_rate_limited", wait)
+    intent = parse_pump_intent(body.message)
+    if intent:
+        return await run_pump_command(request, body, session, *intent)
     if not settings.chat_api_url:
         raise HTTPException(
             503,

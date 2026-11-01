@@ -210,7 +210,9 @@ export interface ChatReply {
   reply: string;
   context: GardenContext;
   prompt_version: string;
-  reply_source: "model" | "garden_facts";
+  reply_source: "model" | "garden_facts" | "device_command";
+  // Set only when the chat message was an explicit operator pump command.
+  command?: CommandOut | null;
 }
 
 export async function sendChat(

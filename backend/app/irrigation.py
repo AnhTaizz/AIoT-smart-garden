@@ -20,7 +20,7 @@ from .schemas import CommandCreate, DEVICE_ID_PATTERN
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-PROMPT_VERSION = "irrigation-decision-v3"
+PROMPT_VERSION = "irrigation-decision-v4"
 # Fields of a past decision the model may see. The stored observation is left
 # out: it embeds that decision's own history, so passing it made every prompt
 # double in size until the model server failed (HTTP 503).
@@ -28,9 +28,10 @@ HISTORY_FIELDS = ("created_at", "status", "reason", "proposal", "reserved_second
                   "command_status", "confirmed_relay_state")
 # The fine-tuned model ignores the format in the system prompt and answers in
 # advisory prose; repeating it at the end of the user turn yields the JSON.
-FORMAT_REMINDER = ('\n\nChỉ trả về đúng MỘT dòng JSON, không thêm chữ nào khác, ví dụ: '
-                   '{"water":true,"duration_seconds":5,"reason":"Đất khô dưới ngưỡng"} hoặc '
-                   '{"water":false,"duration_seconds":0,"reason":"Đất đủ ẩm"}')
+# No concrete reason example: the model copied v3's "Đất đủ ẩm" verbatim.
+FORMAT_REMINDER = ('\nChỉ trả về đúng MỘT dòng JSON, không thêm chữ nào khác, theo schema: '
+                   '{"water":true|false,"duration_seconds":<số nguyên>,"reason":"<lý do của bạn dựa trên số đo ở trên>"}')
+RULE_PULSE_SECONDS = 10
 
 
 class Policy(BaseModel):
@@ -43,6 +44,15 @@ class Policy(BaseModel):
     cooldown_seconds: StrictInt = Field(default=300, ge=300, le=86400)
     daily_budget_seconds: StrictInt = Field(ge=1, le=600)
     evaluation_seconds: StrictInt = Field(default=60, ge=30, le=3600)
+    # Optional operator-set "Luật ngưỡng": below it the server proposes a fixed
+    # pulse without asking the model, recorded as decision_source="rule".
+    force_water_below_pct: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def rule_below_stop(self):
+        if self.force_water_below_pct is not None and self.force_water_below_pct > self.moisture_stop_pct:
+            raise ValueError("force_water_below_pct must not exceed moisture_stop_pct")
+        return self
 
 
 class ProfileUpdate(BaseModel):
@@ -68,8 +78,28 @@ def history_summary(rows) -> list[dict]:
     return [{key: row.get(key) for key in HISTORY_FIELDS} for row in rows[:5]]
 
 
+def fact_line(observation) -> str:
+    # Deterministic restatement of the inputs so the model does not misread the JSON.
+    soil = (observation.get("telemetry") or {}).get("soil_moisture_pct")
+    policy = observation.get("policy") or {}
+    stop, pulse = policy.get("moisture_stop_pct"), policy.get("max_pulse_seconds")
+    if not isinstance(soil, (int, float)) or not isinstance(stop, (int, float)):
+        return "Thiếu độ ẩm đất hoặc ngưỡng ngừng tưới."
+    side = "thấp hơn" if soil < stop else "không thấp hơn"
+    return f"Độ ẩm đất hiện tại {soil:g}%, {side} ngưỡng ngừng tưới {stop:g}%; max_pulse_seconds={pulse}."
+
+
 def decision_user_message(observation) -> str:
-    return json.dumps(jsonable_encoder(observation), ensure_ascii=False) + FORMAT_REMINDER
+    return (json.dumps(jsonable_encoder(observation), ensure_ascii=False)
+            + "\n\n" + fact_line(observation) + FORMAT_REMINDER)
+
+
+def rule_proposal(telemetry, policy: Policy) -> Proposal | None:
+    threshold, soil = policy.force_water_below_pct, telemetry["soil_moisture_pct"]
+    if threshold is None or soil >= threshold:
+        return None
+    return Proposal(water=True, duration_seconds=min(RULE_PULSE_SECONDS, policy.max_pulse_seconds),
+                    reason=f"Luật ngưỡng: độ ẩm đất {soil:g}% < {threshold:g}%")
 
 
 def parse_proposal(value: str) -> Proposal:
@@ -169,7 +199,8 @@ async def snapshot(conn, app, device_id):
 
 async def history(conn, device_id):
     cursor = await conn.execute(
-        "SELECT d.*, c.status AS command_status, c.device_ack, c.confirmed_relay_state "
+        "SELECT d.*, d.observation->>'decision_source' AS decision_source, "
+        "c.status AS command_status, c.device_ack, c.confirmed_relay_state "
         "FROM irrigation_decision d LEFT JOIN command c ON c.command_id=d.command_id "
         "WHERE d.device_id=%s ORDER BY d.created_at DESC LIMIT 20", (device_id,))
     return await cursor.fetchall()
@@ -227,6 +258,21 @@ async def record(conn, device_id, observation, status, reason, proposal=None, re
     return identifier
 
 
+async def ask_model(app, observation) -> Proposal:
+    headers = {"ngrok-skip-browser-warning": "true"}
+    if app.state.settings.chat_api_key:
+        headers["Authorization"] = "Bearer " + app.state.settings.chat_api_key
+    async with asyncio.timeout(app.state.settings.chat_timeout_seconds):
+        response = await app.state.chat_client.post(app.state.settings.chat_api_url, headers=headers, timeout=app.state.settings.chat_timeout_seconds, json={
+            "messages": [{"role": "system", "content": "Bạn là bộ quyết định tưới thử nghiệm Smart-Garden. Chỉ xuất một JSON đúng schema: {\"water\":true hoặc false,\"duration_seconds\":số nguyên,\"reason\":\"lý do tiếng Việt\"}. Không tưới thì duration_seconds=0. Nếu chưa đủ căn cứ, chọn không tưới. Không vượt max_pulse_seconds. Cân nhắc loại cây, giá thể, số đo và các lần tưới trước. Không giả mạo số đo. weather là dự báo tham khảo, không phải số đo tại vườn. Chỉ khi weather.status là fresh mới được dùng nó để cân nhắc không tưới hoặc hoãn tưới vì sắp có mưa; không bao giờ dùng thời tiết làm lý do để tưới hoặc tưới lâu hơn. Không xuất Markdown hoặc suy nghĩ. /no_think"},
+                         {"role": "user", "content": decision_user_message(observation)}],
+            "temperature": 0, "max_tokens": 512})
+    response.raise_for_status()
+    raw = response.json()["response"]
+    observation["model_response"] = str(raw)[:4000]
+    return parse_proposal(raw)
+
+
 async def evaluate(app, profile):
     device_id, token = profile["device_id"], profile["lease_token"]
     policy = Policy.model_validate(profile["policy"])
@@ -243,18 +289,11 @@ async def evaluate(app, profile):
             async with app.state.pool.connection() as conn:
                 await record(conn, device_id, observation, "blocked", reason)
             return
-        headers = {"ngrok-skip-browser-warning": "true"}
-        if app.state.settings.chat_api_key:
-            headers["Authorization"] = "Bearer " + app.state.settings.chat_api_key
-        async with asyncio.timeout(app.state.settings.chat_timeout_seconds):
-            response = await app.state.chat_client.post(app.state.settings.chat_api_url, headers=headers, timeout=app.state.settings.chat_timeout_seconds, json={
-                "messages": [{"role": "system", "content": "Bạn là bộ quyết định tưới thử nghiệm Smart-Garden. Chỉ xuất một JSON đúng schema: {\"water\":true hoặc false,\"duration_seconds\":số nguyên,\"reason\":\"lý do tiếng Việt\"}. Không tưới thì duration_seconds=0. Nếu chưa đủ căn cứ, chọn không tưới. Không vượt max_pulse_seconds. Cân nhắc loại cây, giá thể, số đo và các lần tưới trước. Không giả mạo số đo. weather là dự báo tham khảo, không phải số đo tại vườn. Chỉ khi weather.status là fresh mới được dùng nó để cân nhắc không tưới hoặc hoãn tưới vì sắp có mưa; không bao giờ dùng thời tiết làm lý do để tưới hoặc tưới lâu hơn. Không xuất Markdown hoặc suy nghĩ. /no_think"},
-                             {"role": "user", "content": decision_user_message(observation)}],
-                "temperature": 0, "max_tokens": 512})
-        response.raise_for_status()
-        raw = response.json()["response"]
-        observation["model_response"] = str(raw)[:4000]
-        proposal = parse_proposal(raw)
+        # The rule replaces only the model call; every check below still applies.
+        proposal = rule_proposal(t, policy)
+        observation["decision_source"] = "rule" if proposal else "ai"
+        if proposal is None:
+            proposal = await ask_model(app, observation)
         async with device_lock(app.state.pool, device_id) as conn:
             cursor = await conn.execute("SELECT * FROM irrigation_profile WHERE device_id=%s", (device_id,))
             current = await cursor.fetchone()

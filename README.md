@@ -6,6 +6,8 @@ Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, Fast
 
 ## Chatbot tư vấn nông nghiệp
 
+Đã bổ sung [điều phối tưới tự động bằng AI cho simulator](docs/AI_IRRIGATION.md), có cấu hình AUTO/MANUAL, nhật ký quyết định và theo dõi command/ACK/state. Phần này tách khỏi chatbot và chưa cho phép tưới phần cứng thật.
+
 Nhánh `finetuneAI` tích hợp trợ lý nông nghiệp Qwen3-8B qua API Kaggle/ngrok. Mở **Trợ lý nông nghiệp** ở góc phải dashboard để hỏi về cây trồng hoặc giải thích dữ liệu vườn. Xem [cấu hình, system prompt và kiểm thử chatbot](docs/CHATBOT.md). Chatbot cung cấp tư vấn; điều khiển bơm tiếp tục qua bảng điều khiển hiện có.
 
 ## Bắt đầu từ đâu?

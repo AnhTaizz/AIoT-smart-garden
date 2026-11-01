@@ -4,6 +4,8 @@ Trạng thái: **DRAFT — cả nhóm cần chốt ở G02 trước tích hợp*
 
 ## Ranh giới xử lý
 
+Cập nhật theo yêu cầu mới: có [supervisor AI tưới cho simulator](AI_IRRIGATION.md), API GET/PUT `/devices/{id}/irrigation` và nhật ký quyết định. Chatbot vẫn chỉ tư vấn. Supervisor không bật tưới thật và không chạy đồng thời AUTO cục bộ của thiết bị; MQTT command/ACK/state giữ nguyên. Nội dung roadmap cũ về AI chưa điều khiển cần đọc cùng phạm vi thử nghiệm mới này; G02 vẫn DRAFT.
+
 ESP32 giữ trạng thái tưới, đọc cảm biến, giới hạn chạy bơm và xử lý lỗi cục bộ. Backend kiểm tra yêu cầu, chuyển lệnh, lưu dữ liệu/sự kiện, cung cấp API. Frontend hiển thị trạng thái thiết bị xác nhận. Model chạy trên máy chủ và cung cấp kết quả ảnh; chưa đưa vào vòng điều khiển bơm.
 
 ## Luồng bắt buộc của M1

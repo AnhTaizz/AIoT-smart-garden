@@ -1,6 +1,10 @@
 node_modules/
 dist/
+dist-mobile/
 coverage/
+# Native artifacts are not inputs to the React/Nginx image.
+android/
+ios/
 .env
 .env.*
 !.env.example

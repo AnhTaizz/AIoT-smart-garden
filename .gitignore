@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.mobile.example
 secrets/
 *.pem
 *.key
@@ -21,6 +22,7 @@ htmlcov/
 # Node.js / React
 node_modules/
 dist/
+dist-mobile/
 build/
 .vite/
 coverage/
@@ -54,3 +56,5 @@ Thumbs.db
 .vscode/
 *.swp
 
+# Local task instructions
+/task.txt

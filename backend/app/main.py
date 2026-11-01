@@ -13,8 +13,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from . import repository
+from .access import ControlAccess, control_access
+from .auth import AUTH_ERRORS, OperatorDep, SessionDep, limiters, rate_limited, router as auth_router
 from .chat import CHAT_ERRORS, router as chat_router
 from .config import Settings
+from .http_config import configure_cors
 from .db import apply_migrations, create_pool
 from .ingest import MessageHandler, consume
 from .mqtt_bridge import QUEUE_SIZE, MqttBridge
@@ -43,6 +46,7 @@ DevicePath = Annotated[str, Path(pattern=DEVICE_ID_PATTERN)]
 # One Vietnamese sentence per machine-readable code, for the dashboard.
 ERROR_MESSAGES = {
     **CHAT_ERRORS,
+    **AUTH_ERRORS,
     "no_telemetry": "Thiết bị chưa có telemetry nào được lưu.",
     "no_state": "Thiết bị chưa gửi trạng thái nào.",
     "command_not_found": "Không tìm thấy lệnh với command_id này.",
@@ -129,7 +133,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Smart Garden API", lifespan=lifespan)
+app.include_router(auth_router)
 app.include_router(chat_router)
+configure_cors(app, Settings.from_env())
 
 
 @app.exception_handler(psycopg.Error)
@@ -217,12 +223,18 @@ async def ready(request: Request) -> JSONResponse:
     )
 
 
+@app.get("/control-access", response_model=ControlAccess)
+async def get_control_access(session: SessionDep) -> ControlAccess:
+    """Whether this session may send pump commands; enforced again on POST."""
+    return control_access(session)
+
+
 # --- telemetry -------------------------------------------------------------
 
 
 @app.get("/devices/{device_id}/latest", response_model=LatestTelemetryOut)
 async def get_latest_telemetry(
-    device_id: DevicePath, request: Request
+    device_id: DevicePath, request: Request, _session: SessionDep
 ) -> dict[str, Any]:
     """Latest telemetry stored in PostgreSQL, by server receive time."""
     stale_seconds = request.app.state.settings.telemetry_stale_seconds
@@ -237,6 +249,7 @@ async def get_latest_telemetry(
 async def get_telemetry_history(
     device_id: DevicePath,
     request: Request,
+    _session: SessionDep,
     since: Annotated[datetime | None, Query(alias="from")] = None,
     until: Annotated[datetime | None, Query(alias="to")] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
@@ -273,13 +286,15 @@ def _iso(value: datetime) -> str:
 
 @app.post("/devices/{device_id}/commands", status_code=202, response_model=CommandOut)
 async def create_command(
-    device_id: DevicePath, body: CommandCreate, request: Request
+    device_id: DevicePath, body: CommandCreate, request: Request, _session: OperatorDep
 ) -> dict[str, Any]:
     """Queue a command for the device.
 
     202 only means the backend stored and published the request; the command
     stays `pending` until the device proves what it did or the deadline passes.
     """
+    # Authentication/authorization ran first (OperatorDep): anonymous gets 401,
+    # a viewer 403, before any command row is created or anything is published.
     settings: Settings = request.app.state.settings
     bridge: MqttBridge = request.app.state.bridge
     if (
@@ -296,6 +311,12 @@ async def create_command(
         )
     if not bridge.is_connected():
         raise HTTPException(status_code=503, detail="mqtt_unavailable")
+    # pump_on is rate limited per device before any row is created; pump_off
+    # never is, so a stop can always go out.
+    if body.action == "pump_on":
+        wait = limiters(request).pump_on.hit(device_id)
+        if wait is not None:
+            raise rate_limited("command_rate_limited", wait)
 
     params = (
         {} if body.duration_seconds is None else {"duration_seconds": body.duration_seconds}
@@ -362,6 +383,7 @@ async def create_command(
 async def list_device_commands(
     device_id: DevicePath,
     request: Request,
+    _session: SessionDep,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict[str, Any]:
     async with request.app.state.pool.connection() as conn:
@@ -371,7 +393,9 @@ async def list_device_commands(
 
 
 @app.get("/commands/{command_id}", response_model=CommandOut)
-async def get_command(command_id: UUID, request: Request) -> dict[str, Any]:
+async def get_command(
+    command_id: UUID, request: Request, _session: SessionDep
+) -> dict[str, Any]:
     async with request.app.state.pool.connection() as conn:
         # Expire on read too, so the status never lags behind the sweeper.
         await repository.expire_commands(conn, command_id)
@@ -382,7 +406,9 @@ async def get_command(command_id: UUID, request: Request) -> dict[str, Any]:
 
 
 @app.get("/devices/{device_id}/state", response_model=DeviceStateOut)
-async def get_device_state(device_id: DevicePath, request: Request) -> dict[str, Any]:
+async def get_device_state(
+    device_id: DevicePath, request: Request, _session: SessionDep
+) -> dict[str, Any]:
     """Last state reported by the device itself, not what was requested."""
     stale_seconds = request.app.state.settings.telemetry_stale_seconds
     async with request.app.state.pool.connection() as conn:

@@ -565,3 +565,48 @@ async def get_device_state(
         (stale_seconds, device_id),
     )
     return await cursor.fetchone()
+
+
+# --- auth sessions (BC-02) ---------------------------------------------------
+
+
+async def create_session(
+    conn: AsyncConnection,
+    token_hash: bytes,
+    username: str,
+    role: str,
+    credential_id: str,
+    ttl_seconds: int,
+) -> dict[str, Any]:
+    # Drop sessions that ended more than a day ago; keeps the table small.
+    await conn.execute(
+        "DELETE FROM auth_session"
+        " WHERE coalesce(revoked_at, expires_at) < now() - interval '1 day'"
+    )
+    cursor = await conn.execute(
+        "INSERT INTO auth_session (token_hash, username, role, credential_id, expires_at)"
+        " VALUES (%s, %s, %s, %s, now() + make_interval(secs => %s))"
+        " RETURNING username, role, expires_at",
+        (token_hash, username, role, credential_id, ttl_seconds),
+    )
+    return await cursor.fetchone()
+
+
+async def get_active_session(
+    conn: AsyncConnection, token_hash: bytes, credential_id: str
+) -> dict[str, Any] | None:
+    cursor = await conn.execute(
+        "SELECT username, role, expires_at FROM auth_session"
+        " WHERE token_hash = %s AND credential_id = %s"
+        " AND revoked_at IS NULL AND expires_at > now()",
+        (token_hash, credential_id),
+    )
+    return await cursor.fetchone()
+
+
+async def revoke_session(conn: AsyncConnection, token_hash: bytes) -> None:
+    await conn.execute(
+        "UPDATE auth_session SET revoked_at = now()"
+        " WHERE token_hash = %s AND revoked_at IS NULL",
+        (token_hash,),
+    )

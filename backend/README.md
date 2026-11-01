@@ -1,8 +1,8 @@
 # Backend
 
-Chatbot trên nhánh `finetuneAI`: `POST /chat` kết nối API Kaggle tùy chỉnh, trả `reply/context/prompt_version`. Cấu hình `CHAT_*` chỉ ở backend; xem [hướng dẫn chatbot](../docs/CHATBOT.md). Kiểm thử cô lập bằng `python -m pytest -q tests/test_chat.py tests/test_validation.py`.
+Chatbot (PR #5): `POST /chat` (cần đăng nhập) kết nối API Kaggle tùy chỉnh, trả `reply/context/prompt_version`. Cấu hình `CHAT_*` chỉ ở backend; xem [hướng dẫn chatbot](../docs/CHATBOT.md). Kiểm thử cô lập bằng `python -m pytest -q tests/test_chat.py tests/test_validation.py`.
 
-Trạng thái: B-W1-01 và B-W1-02 đã triển khai theo bản đề xuất v1 cho G02, chờ Toản (C) review và chờ nhóm chốt contract. Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
+Trạng thái: B-W1-01 và B-W1-02 đã merge vào `main` (PR #2); BC-01 thêm CORS cấu hình được và chặn lệnh bơm từ xa (`app/access.py`). Payload MQTT và REST theo mục [Bản đề xuất v1 của Tài (B)](../docs/INTERFACES.md) trong `docs/INTERFACES.md`; mục đó vẫn là **DRAFT**, chưa ai xác nhận.
 
 FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 
@@ -16,6 +16,11 @@ FastAPI chạy bằng Uvicorn. Khi khởi động, backend:
 | File | Vai trò |
 | --- | --- |
 | `app/main.py` | Lifespan, REST endpoint, thân lỗi chuẩn hóa |
+| `app/chat.py` | `POST /chat`: gọi API Kaggle, gắn bản chụp vườn, chặn khẳng định sai về thiết bị |
+| `app/http_config.py` | CORS allow-list tường minh (không wildcard, không credentials) |
+| `app/auth.py` | Đăng nhập, hash scrypt, phiên Bearer lưu hash trong PostgreSQL, dependency 401/403, CLI tạo hash |
+| `app/access.py` | Quyền điều khiển theo role của phiên (`/control-access`) |
+| `app/ratelimit.py` | Rate limit sliding window trong bộ nhớ một tiến trình |
 | `app/mqtt_bridge.py` | paho-mqtt chạy thread riêng, chuyển bản tin vào `asyncio.Queue` |
 | `app/ingest.py` | Validate bản tin MQTT, lưu dữ liệu hợp lệ, ghi bản tin lỗi |
 | `app/schemas.py` | Pydantic model cho telemetry/ACK/state/command v1 |
@@ -36,6 +41,24 @@ Qua dashboard dùng tiền tố `/api` (Nginx/Vite proxy); gọi trực tiếp F
 | `GET /commands/{command_id}` | `pending`/`applied`/`rejected`/`timeout` kèm `device_ack`, `reason`, bằng chứng state và `late_ack` |
 | `GET /devices/{id}/commands?limit=20` | `{device_id, count, items}` sắp theo `command_sequence` giảm dần |
 | `GET /devices/{id}/state` | State thiết bị tự báo gần nhất kèm `boot_id`, `state_sequence`, `stale`; 404 `no_state` |
+| `GET /control-access` | `{"commands_allowed": bool, "reason": "forbidden" \| null, "role"}` theo phiên hiện tại; UI dùng để khóa nút bơm |
+| `POST /chat` | Tư vấn nông nghiệp; không publish command. `CHAT_API_URL` trống → `503 chat_unavailable` (`reason: not_configured`) |
+
+### Xác thực và phân quyền (BC-02)
+
+Ngoài `GET /health`, `GET /ready` và `POST /auth/login`, mọi endpoint ở bảng trên cần `Authorization: Bearer <access_token>`; thiếu hoặc sai → **401**, tài khoản `viewer` gửi lệnh → **403**. Quyền chỉ dựa trên phiên ở server: một operator đã đăng nhập được gửi lệnh qua HTTPS tunnel (Cloudflare) giống như trong LAN; IP, header proxy và CORS không được xem là bằng chứng xác thực.
+
+- **Tài khoản:** `OPERATOR_USERNAME`, `OPERATOR_PASSWORD_HASH` (scrypt N=2^17, r=8, p=1 từ thư viện chuẩn Python; tạo bằng `python -m app.auth hash-password`), `OPERATOR_ROLE` (`operator` | `viewer`). Không có giá trị mặc định; thiếu/sai → login `503 auth_not_configured`, mọi API bảo vệ `401` (fail closed).
+- **Phiên:** token opaque ngẫu nhiên 256 bit. Bảng `auth_session` (migration `004`) chỉ lưu SHA-256 của token, `expires_at`, `revoked_at` và dấu vân tay tài khoản. Đổi username/mật khẩu/role làm mọi phiên cũ hết hiệu lực. `POST /auth/logout` thu hồi ngay.
+- **Rate limit** (bộ đếm trong bộ nhớ **một tiến trình Uvicorn**; reset khi restart, không chia sẻ giữa nhiều worker): đăng nhập sai theo username (tên lạ gộp chung một bucket), `/chat` theo tài khoản, `pump_on` theo thiết bị. Vượt → `429` + `Retry-After`. `pump_off` không bị giới hạn của `pump_on`, nhưng vẫn có thể thất bại nếu broker/mạng/DB lỗi.
+- **Đăng nhập đồng thời (BC-02.1):** mỗi lượt thử được ghi vào bộ đếm sai *trước* khi chạy scrypt (thành công thì xóa lại), nên burst song song không vượt `LOGIN_MAX_FAILURES`. Tối đa `LOGIN_MAX_CONCURRENT` (mặc định 2) phép kiểm tra mật khẩu chạy cùng lúc mỗi tiến trình; lượt vượt nhận ngay `429 login_busy` + `Retry-After: 2`, không xếp hàng. Slot chỉ được trả khi thread hash kết thúc, kể cả khi client ngắt kết nối.
+- **Log:** không ghi mật khẩu, token hay hash; chỉ ghi "Login failed/succeeded".
+
+| Endpoint | Ý nghĩa |
+| --- | --- |
+| `POST /auth/login` | `{"username","password"}` → `access_token`, `token_type: "bearer"`, `expires_at`, `user {username, role}` |
+| `GET /auth/me` | Thông tin phiên hiện tại |
+| `POST /auth/logout` | Thu hồi phiên hiện tại |
 
 Mọi lỗi dùng chung một dạng, kể cả 422:
 
@@ -82,6 +105,9 @@ Telemetry trùng `device_id` + `boot_id` + `sequence` bị **bỏ qua im lặng*
 | `COMMAND_TIMEOUT_SECONDS` | 15 | Hạn nhận đủ bằng chứng; giá trị nháp chờ G02 |
 | `COMMAND_MAX_DURATION_SECONDS` | 120 | Chỉ kiểm tra input; thiết bị vẫn giữ giới hạn bơm riêng |
 | `TELEMETRY_STALE_SECONDS` | 30 | Ngưỡng `stale` cho `/latest` và `/state` |
+| `LOGIN_MAX_CONCURRENT` | 2 | Số phép kiểm tra mật khẩu scrypt (~128 MiB mỗi phép) chạy cùng lúc; vượt → `429 login_busy` |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,https://localhost,capacitor://localhost` | Danh sách origin cách nhau bằng dấu phẩy; `*` bị từ chối khi khởi động; rỗng = tắt CORS. Web cùng origin qua `/api` không cần thêm. CORS không phải xác thực |
+| `CHAT_API_URL`, `CHAT_API_KEY`, `CHAT_TEMPERATURE`, `CHAT_MAX_TOKENS`, `CHAT_TIMEOUT_SECONDS` | Xem `.env.example` | Chỉ ở backend; xem [CHATBOT](../docs/CHATBOT.md) |
 
 ## Chạy và kiểm tra
 
@@ -91,17 +117,22 @@ docker compose up --build -d
 docker compose logs -f backend
 ```
 
-Chạy simulator (thiết bị mô phỏng đủ hai chiều) rồi đọc lại qua proxy dashboard:
+Chạy simulator (thiết bị mô phỏng đủ hai chiều), đăng nhập rồi đọc lại qua proxy dashboard. Đặt mật khẩu vào biến môi trường trong terminal (không ghi vào lịch sử lệnh hay file commit):
 
 ```bash
 cd simulator && python -m pip install -r requirements.txt
 python simulator.py --device-id node_01 --interval 2
-curl "http://127.0.0.1:5173/api/devices/node_01/telemetry?limit=10"
-curl http://127.0.0.1:5173/api/devices/node_01/state
-curl -X POST -H "Content-Type: application/json" \
+read -rs OPERATOR_PASSWORD   # gõ mật khẩu operator, không hiện ra màn hình
+TOKEN=$(curl -s -X POST -H "Content-Type: application/json" \
+  -d "{\"username\":\"$OPERATOR_USERNAME\",\"password\":\"$OPERATOR_PASSWORD\"}" \
+  http://127.0.0.1:5173/api/auth/login | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:5173/api/devices/node_01/telemetry?limit=10"
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:5173/api/devices/node_01/state
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"action":"pump_on","duration_seconds":10}' \
   http://127.0.0.1:5173/api/devices/node_01/commands
-curl http://127.0.0.1:5173/api/commands/<command_id>
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:5173/api/commands/<command_id>
+curl -X POST -H "Authorization: Bearer $TOKEN" http://127.0.0.1:5173/api/auth/logout
 ```
 
 ### Test tự động
@@ -115,6 +146,14 @@ Chạy E2E từ máy host khi Compose đang hoạt động (runner đọc `.env`
 
 Chạy từ root repo. Lệnh đầu kiểm tra IoT; lệnh thứ hai gọi Kaggle thật qua Nginx, dùng device ID ngẫu nhiên và telemetry mô phỏng. Các test chat xác nhận dữ liệu từ MQTT/DB đi vào context, tắt context đúng và không publish command; không chấm chất lượng nông học.
 
+Cách gọn nhất trên stack thật (unit + E2E + simulator, không in mật khẩu DB; E2E dùng `device_id` riêng, không điều khiển `node_01`):
+
+```bash
+docker compose -f compose.yaml -f compose.test.yaml --profile tests run --build --rm regression-tests
+```
+
+E2E cần tài khoản operator của stack: đặt thêm `E2E_OPERATOR_PASSWORD=<mật khẩu gốc>` trong `.env` local (cùng `OPERATOR_USERNAME`/`OPERATOR_PASSWORD_HASH`); service test và `run_e2e.py` đọc từ đó. Stack phải chạy với `CHAT_API_URL` trống để kiểm tra chat chưa cấu hình. `tests/e2e/test_auth_e2e.py` kiểm tra: anonymous → 401, không tạo command, không publish (trực tiếp và qua Nginx); operator → 202 `pending` → `applied` qua ACK+state, kể cả có header tunnel; phiên hết hạn trong PostgreSQL hoặc đã logout → 401; bảng phiên không chứa token gốc; `pump_on` bị 429 nhưng `pump_off` vẫn 202; chat chưa cấu hình → 503 rõ ràng. Unit test: `tests/test_auth.py` (login, token, 401/403, fail closed, rate limit, log), `tests/test_http_config.py` (CORS).
+
 Backend cần Python ≥ 3.11 nên chạy test trong container. Unit test không cần DB:
 
 ```bash
@@ -127,6 +166,7 @@ E2E cần stack đang chạy, gắn vào mạng Compose:
 ```bash
 docker run --rm --network smart-garden_default -v "$PWD/backend:/src" -w /src \
   -e E2E_API_BASE_URL=http://backend:8000 -e E2E_MQTT_HOST=mosquitto \
+  -e E2E_OPERATOR_USERNAME -e E2E_OPERATOR_PASSWORD \
   -e DB_HOST=postgres -e DB_PORT=5432 -e DB_NAME=smart_garden \
   -e DB_USER=smart_garden -e DB_PASSWORD=<POSTGRES_PASSWORD trong .env> \
   python:3.12-slim sh -c "pip install -q -r requirements-dev.txt && python -m pytest -v tests/e2e"
@@ -140,5 +180,5 @@ Trên Git Bash (Windows) thêm `MSYS_NO_PATHCONV=1` và dùng `$(pwd -W)/backend
 - Bản tin đến khi PostgreSQL đang down bị log lỗi và bỏ qua (không buffer lâu dài); command khi DB down trả 503 và không được publish.
 - MQTT subscriber dùng clean session: ACK/state gửi lúc backend tắt sẽ mất, command khi đó về `timeout`.
 - Backend học `boot_id` từ state nên một state của boot chưa từng thấy luôn được coi là boot mới; không có thứ tự tuyệt đối giữa hai boot chưa biết.
-- Chưa có xác thực API/MQTT (chỉ dùng trong LAN tin cậy, xem `compose.lan.yaml`).
+- API dùng một tài khoản operator và rate limit trong bộ nhớ (xem [BC-02_REPORT](../docs/BC-02_REPORT.md)). MQTT **chưa** có username/password/ACL; không public MQTT/PostgreSQL.
 - Chưa kiểm tra với ESP32 thật; đồng bộ giờ cho ESP32 là đầu việc trước M2 (xem `docs/INTERFACES.md`).

@@ -1,6 +1,6 @@
 # Smart Garden — Kế hoạch triển khai 7 tuần
 
-Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` hiện có khung hạ tầng development và dashboard React cơ bản. [Draft PR #2](https://github.com/AnhTaizz/AIoT-smart-garden/pull/2) đã triển khai backend/simulator hai chiều gồm MQTT ingest, PostgreSQL, latest/history API và command/ACK/state; phần này chưa merge, còn frontend telemetry/command và phiên smartphone LAN vẫn chưa có.
+Bộ tài liệu phân công và quản lý công việc cho nhóm 3 người. Phiên bản kế hoạch: 2026-09-13. `main` đã có backend/simulator hai chiều (PR #2: MQTT ingest, PostgreSQL, latest/history API, command/ACK/state), dashboard React telemetry + điều khiển bơm (PR #3) và chatbot Qwen3 (PR #5). Nhánh BC-01 bổ sung Capacitor Android, cấu hình API HTTPS cho mobile và CORS; xem [báo cáo BC-01](docs/BC-01_REPORT.md). Phiên smartphone thật qua LAN và M1 vẫn **chưa nghiệm thu**; trạng thái chi tiết ở [PROJECT_STATE](docs/PROJECT_STATE.md).
 
 Demo chính được chốt là **LOCAL MOBILE DEMO**: laptop chạy React, FastAPI, Mosquitto và PostgreSQL; điện thoại và ESP32 kết nối cùng Wi-Fi hoặc hotspot với laptop. Điện thoại mở dashboard bằng địa chỉ IP LAN của laptop. Public Internet deployment không bắt buộc và chỉ thực hiện ở tuần 6 nếu core đã ổn định, còn đủ thời gian kiểm thử.
 
@@ -51,6 +51,8 @@ React/Nginx, FastAPI, Mosquitto và PostgreSQL đều chạy trên laptop bằng
 | [WORKFLOW](docs/WORKFLOW.md) | Task, review, Git, GitHub và xử lý chậm tiến độ |
 | [PROJECT_STATE](docs/PROJECT_STATE.md) | Trạng thái thực tế và việc tiếp theo |
 | [PR2_TEST_HANDOFF_2026-09-26](docs/PR2_TEST_HANDOFF_2026-09-26.md) | Bằng chứng regression và bàn giao API cho C-W1 |
+| [BC-01_REPORT](docs/BC-01_REPORT.md) | Audit repo, tích hợp mobile + chatbot, kết quả test và việc cho BC-02 |
+| [BC-02_REPORT](docs/BC-02_REPORT.md) | Xác thực API, điều khiển từ xa, rate limit, threat model và cách demo |
 | [WEEKLY_REVIEW](docs/templates/WEEKLY_REVIEW.md) | Mẫu nghiệm thu tuần và ghi kết quả |
 
 Hai mẫu GitHub đi kèm: `.github/ISSUE_TEMPLATE/task.md` và `.github/pull_request_template.md`.
@@ -139,6 +141,22 @@ Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/ready
 ```
 
 `/health` chỉ xác nhận tiến trình API hoạt động. `/ready` thực hiện `SELECT 1` trên PostgreSQL và trả HTTP 503 khi database không kết nối được.
+
+## Đăng nhập, app Android và truy cập từ xa (BC-01, BC-02)
+
+Cùng một codebase React được đóng gói bằng Capacitor Android (`frontend/android`). Web giữ `/api` cùng origin; app Android gọi **trực tiếp** backend qua URL HTTPS cấu hình lúc build (`VITE_API_URL` trong `frontend/.env.mobile.local`, không commit). Cách build/cài APK xem [frontend/README](frontend/README.md#app-android-capacitor).
+
+**Đăng nhập bắt buộc (BC-02).** Dữ liệu vườn, lịch sử, lệnh bơm và chatbot chỉ dùng được sau khi đăng nhập tài khoản vận hành. Chỉ `/health`, `/ready` và `/auth/login` là public. Tạo tài khoản trong `.env` (không commit):
+
+```bash
+docker compose run --rm --no-deps backend python -m app.auth hash-password
+```
+
+Lệnh hỏi mật khẩu hai lần (tối thiểu 10 ký tự) và chỉ in ra dòng `scrypt:...`. Đặt `OPERATOR_USERNAME=<tên>` và `OPERATOR_PASSWORD_HASH=<dòng vừa in>` trong `.env`, rồi `docker compose up -d --force-recreate backend`. Thiếu hoặc sai cấu hình thì không ai đăng nhập được (fail closed). `OPERATOR_ROLE=viewer` tạo tài khoản chỉ xem. Phiên hết hạn sau `AUTH_SESSION_TTL_SECONDS` (mặc định 8 giờ); token chỉ nằm trong bộ nhớ app, tải lại trang hoặc mở lại app phải đăng nhập lại.
+
+Người vận hành đã đăng nhập có thể giám sát **và điều khiển bơm từ xa** qua HTTPS tunnel, kể cả app Android qua 4G. Quyền được kiểm tra ở server cho từng request; IP, header Cloudflare và CORS không được dùng làm bằng chứng xác thực. Mức an toàn này là **cho demo**: một tài khoản dùng chung, rate limit trong bộ nhớ một tiến trình, MQTT vẫn anonymous trong LAN. Không public cổng MQTT/PostgreSQL; chi tiết và hạn chế ở [BC-02_REPORT](docs/BC-02_REPORT.md).
+
+Dashboard chỉ mở nút bơm khi backend online **và** `GET /control-access` trả rõ `commands_allowed: true`. Nếu endpoint lỗi, timeout hoặc trả dữ liệu lạ, nút bị khóa với thông báo "Không xác minh được quyền điều khiển"; trạng thái backend không bị đổi sang offline. Đây chỉ là UX, backend vẫn quyết định ở mỗi lệnh.
 
 ## Xem log
 

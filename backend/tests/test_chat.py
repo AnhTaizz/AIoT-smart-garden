@@ -13,6 +13,9 @@ from psycopg_pool import PoolTimeout
 
 from app import repository
 from app.chat import PROMPT_VERSION, GardenContext, GardenState, GardenTelemetry, clean_reply, guard_reply
+from dataclasses import replace
+
+from app.auth import Session, require_session
 from app.config import Settings
 from app.main import app
 
@@ -39,7 +42,15 @@ def chat_env(monkeypatch):
 
     upstream = httpx.AsyncClient(transport=httpx.MockTransport(handle))
     pool = FakePool()
-    settings = Settings.from_env()
+    # Chat logic is tested without auth here; tests/test_auth.py covers /chat auth.
+    settings = replace(
+        Settings.from_env(), chat_api_url="https://kaggle.test/v1/chat/completions",
+        chat_rate_limit=1000,
+    )
+    app.dependency_overrides[require_session] = lambda: Session(
+        "operator1", "operator", datetime.now(timezone.utc), b"t" * 32
+    )
+    monkeypatch.setattr(app.state, "limiters", None, raising=False)
     monkeypatch.setattr(app.state, "chat_client", upstream, raising=False)
     monkeypatch.setattr(app.state, "settings", settings, raising=False)
     monkeypatch.setattr(app.state, "pool", pool, raising=False)
@@ -50,6 +61,7 @@ def chat_env(monkeypatch):
     client = TestClient(app)  # Deliberately no lifespan: external services are isolated.
     yield client, pool, captured, upstream
     bridge.publish.assert_not_called()
+    app.dependency_overrides.clear()
     client.close()
     asyncio.run(upstream.aclose())
 
@@ -179,6 +191,7 @@ def test_html_instead_of_json_is_reported(chat_env, monkeypatch):
 def test_thinking_is_removed_and_optional_key_stays_on_backend(chat_env, monkeypatch):
     client, _, captured, _ = chat_env
     monkeypatch.setenv("CHAT_API_KEY", "test-only-not-a-secret")
+    monkeypatch.setenv("CHAT_API_URL", "https://kaggle.test/v1/chat/completions")
     monkeypatch.setattr(app.state, "settings", Settings.from_env())
     client.post("/chat", json={"message": "Xin chào"})
     assert captured[0].headers["Authorization"] == "Bearer test-only-not-a-secret"
@@ -193,7 +206,7 @@ def test_total_timeout_is_enforced(chat_env, monkeypatch):
         await asyncio.sleep(1)
 
     monkeypatch.setattr(app.state.chat_client, "post", slow)
-    monkeypatch.setattr(app.state, "settings", MagicMock(chat_timeout_seconds=0.01, chat_api_key=None))
+    monkeypatch.setattr(app.state, "settings", replace(app.state.settings, chat_timeout_seconds=0.01))
     response = client.post("/chat", json={"message": "Xin chào", "include_garden_context": False})
     assert response.status_code == 504
 

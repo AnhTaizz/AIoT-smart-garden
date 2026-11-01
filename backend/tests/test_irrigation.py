@@ -48,3 +48,31 @@ def test_requires_fresh_matching_boot_and_off(policy):
     s["boot_id"] = t["boot_id"]
     s["relay_state"] = "on"
     assert check_observation(t, s, policy, 30)
+
+
+POLICY = {"crop": "Cây thử nghiệm", "stage": "Thử nghiệm", "substrate": "Giá thể mô phỏng", "moisture_stop_pct": 80,
+          "max_pulse_seconds": 2, "daily_budget_seconds": 10}
+
+
+def test_irrigation_api_requires_login(api):
+    assert api.client.get("/devices/node_01/irrigation").status_code == 401
+    response = api.client.put("/devices/node_01/irrigation", json={"enabled": True, "policy": POLICY})
+    assert response.status_code == 401
+    api.bridge.publish.assert_not_called()
+
+
+def test_viewer_cannot_change_irrigation(api):
+    api.configure(operator_role="viewer")
+    headers = api.login()
+    for enabled in (True, False):
+        response = api.client.put("/devices/node_01/irrigation", json={"enabled": enabled, "policy": POLICY}, headers=headers)
+        assert response.status_code == 403
+    api.bridge.publish.assert_not_called()
+
+
+def test_auto_is_refused_without_a_decision_model(api):
+    headers = api.login()
+    response = api.client.put("/devices/node_01/irrigation", json={"enabled": True, "policy": POLICY}, headers=headers)
+    assert response.status_code == 503
+    assert response.json()["detail"]["reason"] == "not_configured"
+    api.bridge.publish.assert_not_called()

@@ -32,7 +32,7 @@ MQTT command/ACK/state giữ nguyên contract. Không có thay đổi GPIO hay f
 
 ## Kiểm thử
 
-Bản tích hợp `integration/smart-garden-unified-20261101`: **NOT TESTED** sau khi thêm auth cho endpoint irrigation (theo yêu cầu, kiểm thử để sau E2E). Số liệu dưới đây là của PR #9 trên `main` trước BC-02.
+Bản tích hợp `integration/smart-garden-unified-20261101` (2026-11-01): backend unit + E2E 239 pass, 2 skip (live Kaggle); gồm 8 ca supervisor và các ca mới anonymous 401 / viewer 403 / AUTO không có `CHAT_API_URL` → 503. Số liệu dưới đây là của PR #9 trên `main` trước BC-02.
 
 Kết quả 2026-11-01: backend unit 109/109, frontend 20/20 và build thành công; E2E 41/41 với PostgreSQL/MQTT thật (33 ca cũ và 8 ca supervisor). Ca AUTO xác nhận ON → ACK/state, không tưới, JSON sai, cooldown, vượt giới hạn, STOP trong lúc chờ AI, timeout lệnh và lease hết hạn. Model trong các ca supervisor là giả lập có kiểm soát. Kiểm tra trực tiếp API Kaggle hiện nhận lỗi HTTP; chưa xác minh quyết định từ Qwen thật ở phiên này. AUTO vẫn tắt mặc định.
 

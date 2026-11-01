@@ -2,7 +2,7 @@
 
 Nhánh: `integration/smart-garden-unified-20261101`, tạo từ `origin/main` `13e1ac0`, sau đó merge `origin/main` mới `0b039d6` (PR #9). Người thực hiện: Claude Code theo yêu cầu của Tài (B). Không merge vào `main`, không force-push, không xóa nhánh cũ.
 
-**Kiểm thử: NOT TESTED.** Theo yêu cầu của chủ dự án trong phiên này, toàn bộ regression/E2E để sau khi E2E ổn định. Không có mục nào dưới đây là PASS mới.
+**Kiểm thử:** regression phần mềm đã chạy ngày 2026-11-01 (§5b). Điện thoại thật, ESP32 thật, iOS và Kaggle thật vẫn **NOT TESTED**.
 
 ## 1. Nhánh và PR đã kiểm tra
 
@@ -64,7 +64,26 @@ Không có quyền Cloudflare API trong phiên này; không tạo tunnel, không
 - Build frontend lần đầu fail vì `npm test` trong Dockerfile: 3 test polling của `App.test.tsx` bắt nhầm interval 5 giây của `IrrigationPanel`. Đã mock panel trong file test đó (panel có test riêng). Vitest **75/75 PASS**.
 - `up --build -d` (không `-v`): migration `004_auth_sessions`, `004_irrigation` được áp dụng; bốn container healthy; connector `garden-local` vẫn nối được.
 - Kiểm tra qua domain thật: `garden` `/`, `/api/health`, `/api/ready` và `garden-api` `/health`, `/ready` → 200; anonymous `latest`, `irrigation`, `POST commands` → **401**; đăng nhập `admin` → operator, `latest` 200, `control-access` cho phép; logout → token cũ 401. Không gửi lệnh bơm.
-- Các test khác (backend unit/E2E, simulator, firmware, APK, điện thoại 4G) vẫn **NOT TESTED**.
+- Simulator `node_01` (dữ liệu **mô phỏng**) chạy nền để dashboard có telemetry; qua domain, operator thấy `simulated: true`, `stale: false`.
+
+## 5b. Regression bản tích hợp — 2026-11-01
+
+Backend/simulator chạy trên stack Compose **tách biệt** (`-p sg-regression`, port 18000/15173/11883/15432, DB và tài khoản test riêng trong env file tạm), không đụng stack demo hay volume `smart-garden`.
+
+| Kiểm thử | Kết quả |
+| --- | --- |
+| `docker compose config` base, `+device`, `+lan`, `+test --profile tests`, `+secure`, `+tunnel` (placeholder chỉ để parse) | **PASS** 7/7 |
+| Backend unit + E2E (PostgreSQL 16, Mosquitto 2.0, FastAPI, Nginx thật) | **239 PASS**, 2 SKIP (live Kaggle, cần `E2E_CHAT_LIVE=1`), 0 FAIL |
+| Simulator unittest | **PASS** 31/31 |
+| Frontend Vitest + TypeScript/Vite build | **PASS** 75/75, build OK |
+| Firmware native (`firmware/tests/run.ps1`, g++ 12.1 mingw64, ArduinoJson 7.4.2 tải vào `firmware/build/` ignored) | **PASS** 95 checks; không compile Arduino/ESP32, không flash |
+| `build:mobile` + `cap sync android` + `gradlew assembleDebug` với `VITE_API_URL=https://garden-api.anhtaizz.id.vn` | **PASS**; APK `frontend/android/app/build/outputs/apk/debug/app-debug.apk` (4,3 MB, không commit); bundle chứa `garden-api`, không tham chiếu storage/Quick Tunnel |
+| Cài APK / điện thoại 4G | **NOT TESTED** (`adb devices -l` trống) |
+
+Lần chạy đầu: 226 pass, 10 fail, đều do ghép PR #9 với BC-02, đã sửa:
+- Byte NUL lọt vào `test_irrigation_e2e.py` khi merge (lỗi ghi file), gây lỗi collection.
+- 3 test auth: `create_command` giờ gọi khóa irrigation, mà `FakePool` của unit test không có DB → fixture `api` thay `irrigation.device_lock` bằng bản no-op (khóa thật đã có E2E cover).
+- 7 test supervisor: BC-02 bỏ URL Kaggle mặc định nên `chat_api_url` rỗng → E2E đặt URL cho model giả lập. Hành vi sản phẩm: `PUT /irrigation` bật AUTO khi chưa có `CHAT_API_URL` giờ trả `503 chat_unavailable/not_configured` thay vì nhận rồi lỗi ở chu kỳ sau. Thêm unit test: anonymous 401, viewer 403, AUTO không có model 503; không publish lệnh nào.
 
 ## 6. Bảo mật — vấn đề mở
 

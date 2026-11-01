@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
-from app import repository
+from app import irrigation, repository
 from app.auth import hash_password
 from app.config import Settings
 from app.main import app
@@ -36,6 +36,20 @@ class FakePool:
 
             raise PoolTimeout()
         yield object()
+
+
+class FakeIrrigationConn:
+    async def execute(self, *_args):
+        return None
+
+    async def commit(self):
+        return None
+
+
+@asynccontextmanager
+async def fake_device_lock(_pool, _device_id):
+    # The real pg advisory lock and AUTO disable are covered by tests/e2e.
+    yield FakeIrrigationConn()
 
 
 class FakeSessions:
@@ -88,6 +102,7 @@ def api(monkeypatch):
     monkeypatch.setattr(app.state, "bridge", bridge, raising=False)
     monkeypatch.setattr(app.state, "pool", pool, raising=False)
     monkeypatch.setattr(app.state, "limiters", None, raising=False)
+    monkeypatch.setattr(irrigation, "device_lock", fake_device_lock)
     monkeypatch.setattr(repository, "create_session", sessions.create)
     monkeypatch.setattr(repository, "get_active_session", sessions.get_active)
     monkeypatch.setattr(repository, "revoke_session", sessions.revoke)

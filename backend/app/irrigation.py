@@ -145,6 +145,10 @@ async def update_profile(device_id: str, body: ProfileUpdate, request: Request, 
     if not re.fullmatch(DEVICE_ID_PATTERN, device_id):
         raise HTTPException(422, "invalid_payload")
     app = request.app
+    if body.enabled and not app.state.settings.chat_api_url:
+        # Without a model every evaluation would fail; refuse instead of arming AUTO.
+        raise HTTPException(503, detail={"code": "chat_unavailable", "reason": "not_configured",
+                                         "message": "Chưa cấu hình CHAT_API_URL nên chưa bật được AUTO."})
     async with device_lock(app.state.pool, device_id) as conn:
         if body.enabled:
             t, s = await snapshot(conn, app, device_id)

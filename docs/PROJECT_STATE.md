@@ -4,7 +4,7 @@
 
 Nhánh `integration/smart-garden-unified-20261101` gom BC-01, BC-02, W3 (docs), firmware Arduino IDE, phần còn thiếu của PR #4 (G02 AGREED docs, REMOTE_DEMO, iOS) và PR #9 (supervisor tưới AI cho simulator, nay cần đăng nhập). Chi tiết, conflict và việc cần làm: [INTEGRATION_REPORT_2026-11-01](INTEGRATION_REPORT_2026-11-01.md).
 
-- **Kiểm thử bản tích hợp: NOT TESTED** (để sau E2E theo yêu cầu chủ dự án). Số liệu test trong các mục khác là của từng nhánh trước khi hợp nhất.
+- Regression bản tích hợp 2026-11-01: backend unit + E2E 239 pass / 2 skip (live Kaggle), simulator 31/31, frontend 75/75 + build, firmware native 95 checks, debug APK build OK. Điện thoại thật, ESP32 thật, iOS, Kaggle thật: NOT TESTED. Đây là PASS thành phần, không đổi trạng thái milestone.
 - Stack demo đã được deploy bản tích hợp ngày 2026-11-01: qua domain thật, anonymous nhận 401, operator đăng nhập/đăng xuất được; frontend Vitest 75/75. Chi tiết ở báo cáo §5a.
 - Domain: `garden` và `garden-api` hoạt động qua Named Tunnel `garden-local`; apex chưa có route; TOEIC trả 502 từ trước, không thuộc phạm vi.
 - Kiến trúc Auto **chưa chốt** (ESP32 / server / supervisor PR #9); xem [INTERFACES](INTERFACES.md#ranh-giới-xử-lý). Weather W3 chưa có code.

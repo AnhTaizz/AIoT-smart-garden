@@ -203,8 +203,9 @@ def test_forecast_is_model_input_only_and_never_blocks_evaluation(policy, monkey
         body = json.loads(captured[0].content)
         content = body["messages"][1]["content"]
         assert content.endswith(irrigation.FORMAT_REMINDER)
-        sent = json.loads(content.removesuffix(irrigation.FORMAT_REMINDER))
+        sent = json.loads(content.split("\n\n", 1)[0])
         assert sent["prompt_version"] == irrigation.PROMPT_VERSION
+        assert sent["decision_source"] == "ai"  # no rule threshold configured
         assert sent["weather"]["status"] == forecast
         assert "không bao giờ dùng thời tiết làm lý do để tưới" in body["messages"][0]["content"]
         if forecast == "fresh":
@@ -314,11 +315,93 @@ def test_model_history_drops_nested_observations():
 
 
 def test_decision_message_ends_with_the_json_format():
-    message = decision_user_message({"telemetry": {"soil_moisture_pct": 30}})
+    message = decision_user_message({"telemetry": {"soil_moisture_pct": 30}, "policy": {"moisture_stop_pct": 35, "max_pulse_seconds": 60}})
     assert message.startswith('{"telemetry"')
-    assert message.rstrip().endswith('"reason":"Đất đủ ẩm"}')
-    # The reminder examples themselves are valid proposals the parser accepts.
-    for example in ('{"water":true,"duration_seconds":5,"reason":"Đất khô dưới ngưỡng"}',
-                    '{"water":false,"duration_seconds":0,"reason":"Đất đủ ẩm"}'):
-        assert example in message
-        parse_proposal(example)
+    assert message.endswith(irrigation.FORMAT_REMINDER)
+    # Deterministic fact line, so the model does not have to read the JSON comparison.
+    assert "Độ ẩm đất hiện tại 30%, thấp hơn ngưỡng ngừng tưới 35%; max_pulse_seconds=60." in message
+    # No concrete reason example: v3's "Đất đủ ẩm" was copied verbatim by the model.
+    assert "Đất đủ ẩm" not in irrigation.FORMAT_REMINDER and "Đất khô" not in irrigation.FORMAT_REMINDER
+    assert "Thiếu độ ẩm đất" in decision_user_message({"telemetry": {"soil_moisture_pct": None}})
+
+
+def test_rule_threshold_cannot_exceed_stop_threshold():
+    with pytest.raises(Exception):
+        Policy.model_validate({**POLICY, "force_water_below_pct": 81})
+    assert Policy.model_validate({**POLICY, "force_water_below_pct": 80}).force_water_below_pct == 80
+    assert Policy.model_validate(POLICY).force_water_below_pct is None  # stored policies stay valid
+
+
+def run_simulator_evaluation(monkeypatch, policy, *, last_attempt=None, spent=0, soil=40):
+    """Simulator path with mocked I/O. Returns (model requests, issue mock, record mock)."""
+    async def run():
+        now = datetime.now(timezone.utc)
+        profile = dict(device_id="node_01", lease_token=uuid4(), policy=policy.model_dump(),
+                       revision=1, enabled=True, lease_until=now + timedelta(seconds=180), last_attempt=last_attempt)
+
+        async def execute(sql, params=()):
+            if "pg_try_advisory_lock" in sql: row = {"acquired": True}
+            elif "SELECT * FROM irrigation_profile" in sql: row = profile
+            elif "COALESCE(sum(reserved_seconds)" in sql: row = {"spent": spent}
+            else: row = None
+            return SimpleNamespace(fetchone=AsyncMock(return_value=row))
+
+        conn = SimpleNamespace(execute=AsyncMock(side_effect=execute), commit=AsyncMock(), rollback=AsyncMock())
+        @asynccontextmanager
+        async def connection():
+            yield conn
+        issue = AsyncMock()
+        app = SimpleNamespace(state=SimpleNamespace(settings=replace(Settings.from_env(), chat_api_url="http://ai.test/decide"),
+                              pool=SimpleNamespace(connection=connection), issue_irrigation_command=issue))
+        captured = []
+        async def model_reply(request):
+            captured.append(request)
+            return httpx.Response(200, json={"response": '{"water":false,"duration_seconds":0,"reason":"Test response"}'})
+        t, s = observation()
+        t["soil_moisture_pct"] = soil
+        recorded = AsyncMock(return_value=uuid4())
+        monkeypatch.setattr(irrigation, "snapshot", AsyncMock(return_value=(t, s)))
+        monkeypatch.setattr(irrigation, "history", AsyncMock(return_value=[]))
+        monkeypatch.setattr(irrigation, "record", recorded)
+        monkeypatch.setattr(irrigation.repository, "list_commands", AsyncMock(return_value=[]))
+        async with httpx.AsyncClient(transport=httpx.MockTransport(model_reply)) as client:
+            app.state.chat_client = client
+            await irrigation.evaluate(app, profile)
+        return captured, issue, recorded
+    return asyncio.run(run())
+
+
+def test_rule_waters_below_threshold_without_asking_the_model(monkeypatch):
+    policy = Policy.model_validate({**POLICY, "max_pulse_seconds": 60, "force_water_below_pct": 50})
+    captured, issue, recorded = run_simulator_evaluation(monkeypatch, policy, soil=40)
+    assert captured == []
+    issue.assert_awaited_once()
+    assert issue.await_args.args[1].action == "pump_on" and issue.await_args.args[1].duration_seconds == 10
+    observation_arg, status, reason = recorded.await_args.args[2:5]
+    assert observation_arg["decision_source"] == "rule" and status == "reserved"
+    assert reason.startswith("Luật ngưỡng:")  # labelled, never presented as the AI's decision
+
+
+def test_rule_pulse_is_capped_by_max_pulse(monkeypatch):
+    policy = Policy.model_validate({**POLICY, "force_water_below_pct": 50})  # max_pulse_seconds=2
+    _, issue, _ = run_simulator_evaluation(monkeypatch, policy, soil=40)
+    assert issue.await_args.args[1].duration_seconds == 2
+
+
+@pytest.mark.parametrize("case", ["cooldown", "budget"])
+def test_rule_still_respects_cooldown_and_budget(monkeypatch, case):
+    policy = Policy.model_validate({**POLICY, "force_water_below_pct": 50})
+    kwargs = {"last_attempt": datetime.now(timezone.utc)} if case == "cooldown" else {"spent": 9}
+    captured, issue, recorded = run_simulator_evaluation(monkeypatch, policy, **kwargs)
+    assert captured == []
+    issue.assert_not_awaited()
+    assert recorded.await_args.args[3] == "blocked"
+
+
+def test_rule_at_or_above_threshold_asks_the_model(monkeypatch):
+    policy = Policy.model_validate({**POLICY, "force_water_below_pct": 40})
+    captured, issue, recorded = run_simulator_evaluation(monkeypatch, policy, soil=40)
+    assert len(captured) == 1
+    issue.assert_not_awaited()
+    assert recorded.await_args.args[2]["decision_source"] == "ai"
+    assert recorded.await_args.args[3] == "no_water"

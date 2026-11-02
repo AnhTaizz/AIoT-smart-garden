@@ -12,8 +12,10 @@ from fastapi.testclient import TestClient
 from psycopg_pool import PoolTimeout
 
 from app import repository
-from app.chat import PROMPT_VERSION, GardenContext, GardenState, GardenTelemetry, clean_reply, guard_reply
+from app.chat import PROMPT_VERSION, parse_pump_intent, GardenContext, GardenState, GardenTelemetry, clean_reply, guard_reply
 from dataclasses import replace
+
+from fastapi import HTTPException
 
 from app.auth import Session, require_session
 from app.config import Settings
@@ -289,7 +291,7 @@ def test_observed_unsupported_claims_are_replaced_with_labelled_facts(reply, opt
     safe, source = guard_reply(reply, context)
     assert source == "garden_facts"
     assert "Thông tin có thể kiểm chứng" in safe
-    assert "không thực hiện bật/tắt bơm" in safe
+    assert "không bật/tắt bơm" in safe
     if options.get("soil_error"):
         assert "Độ ẩm đất: không khả dụng" in safe
         assert "40%" not in safe
@@ -312,7 +314,7 @@ def test_grounding_check_keeps_valid_advice_and_negative_statements(reply):
 def test_route_labels_fact_fallback_instead_of_claiming_model_answer(chat_env, monkeypatch):
     client, _, _, _ = chat_env
     monkeypatch.setattr(app.state.chat_client, "post", AsyncMock(return_value=httpx.Response(200, json={"response": "Tôi đã bật bơm trong 30 giây."})))
-    response = client.post("/chat", json={"message": "Bật bơm", "include_garden_context": False})
+    response = client.post("/chat", json={"message": "Tư vấn tưới giúp tôi", "include_garden_context": False})
     assert response.status_code == 200
     assert response.json()["reply_source"] == "garden_facts"
     assert response.json()["context"]["status"] == "disabled"
@@ -327,3 +329,107 @@ def test_disabled_context_is_never_interpreted_as_disabled_pump(reply):
     text, source = guard_reply(reply, context)
     assert source == "garden_facts"
     assert "việc tắt gửi dữ liệu KHÔNG có nghĩa bơm tắt" in text
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("bật cho tôi máy bơm", ("pump_on", 10)),
+    ("Bật bơm", ("pump_on", 10)),
+    ("bật bơm 20 giây", ("pump_on", 20)),
+    ("Mở máy bơm trong 15s", ("pump_on", 15)),
+    ("chạy bơm 2 phút", ("pump_on", 120)),
+    ("bat bom 30 giay", ("pump_on", 30)),
+    ("tắt bơm", ("pump_off", None)),
+    ("Dừng máy bơm ngay", ("pump_off", None)),
+    ("dung bom", ("pump_off", None)),
+    ("đừng bật bơm", None),
+    ("dung bat bom", None),
+    ("không bật bơm nữa", None),
+    ("có nên bật bơm không?", None),
+    ("Khi nào nên bật bơm", None),
+    ("bơm chạy không", None),
+    ("cây bị vàng lá", None),
+])
+def test_pump_intent_is_explicit_and_deterministic(message, expected):
+    assert parse_pump_intent(message) == expected
+
+
+def fake_command(action="pump_on", seconds=10):
+    now = datetime.now(timezone.utc)
+    return {
+        "command_id": "3f1c1a62-0000-4000-8000-000000000001", "device_id": "node_01", "command_sequence": 7,
+        "action": action, "params": {"duration_seconds": seconds} if seconds else {}, "target_boot_id": "boot",
+        "status": "pending", "device_ack": None, "reason": None, "created_at": now,
+        "expires_at": now + timedelta(seconds=10), "published_at": now, "acked_at": None, "ack_boot_id": None,
+        "state_confirmed_at": None, "confirmed_relay_state": None, "confirmed_state_sequence": None,
+        "confirmed_boot_id": None, "finalized_at": None, "late_ack": None, "late_ack_at": None,
+    }
+
+
+def test_operator_chat_command_uses_the_button_path_without_the_model(chat_env, monkeypatch):
+    client, _, captured, _ = chat_env
+    manual = AsyncMock(return_value=fake_command(seconds=20))
+    monkeypatch.setattr(app.state, "manual_command", manual, raising=False)
+    # Works even without a model: no Kaggle call is made for a command.
+    monkeypatch.setattr(app.state, "settings", replace(app.state.settings, chat_api_url=""))
+    response = client.post("/chat", json={"message": "bật bơm 20 giây"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert captured == []
+    assert body["reply_source"] == "device_command"
+    assert body["command"]["status"] == "pending" and body["command"]["params"]["duration_seconds"] == 20
+    assert "chờ thiết bị xác nhận" in body["reply"] and "đã bật" not in body["reply"]
+    device_id, command = manual.await_args.args[:2]
+    assert device_id == "node_01" and command.action == "pump_on" and command.duration_seconds == 20
+
+
+def test_chat_stop_command(chat_env, monkeypatch):
+    client, _, captured, _ = chat_env
+    manual = AsyncMock(return_value=fake_command("pump_off", None))
+    monkeypatch.setattr(app.state, "manual_command", manual, raising=False)
+    body = client.post("/chat", json={"message": "tắt bơm"}).json()
+    assert captured == [] and body["command"]["action"] == "pump_off"
+    assert manual.await_args.args[1].duration_seconds is None
+
+
+def test_viewer_cannot_command_the_pump_from_chat(chat_env, monkeypatch):
+    client, _, captured, _ = chat_env
+    app.dependency_overrides[require_session] = lambda: Session(
+        "viewer1", "viewer", datetime.now(timezone.utc), b"t" * 32
+    )
+    manual = AsyncMock()
+    monkeypatch.setattr(app.state, "manual_command", manual, raising=False)
+    body = client.post("/chat", json={"message": "bật cho tôi máy bơm"}).json()
+    manual.assert_not_awaited()
+    assert captured == [] and body["command"] is None
+    assert "Tài khoản xem" in body["reply"]
+
+
+def test_chat_command_over_the_limit_is_refused_not_shortened(chat_env, monkeypatch):
+    client, _, _, _ = chat_env
+    manual = AsyncMock()
+    monkeypatch.setattr(app.state, "manual_command", manual, raising=False)
+    body = client.post("/chat", json={"message": "bật bơm 10 phút"}).json()
+    manual.assert_not_awaited()
+    assert body["command"] is None and "chưa gửi lệnh" in body["reply"]
+
+
+@pytest.mark.parametrize("error,text", [
+    (HTTPException(503, "mqtt_unavailable"), "MQTT"),
+    (HTTPException(429, {"code": "command_rate_limited", "retry_after_seconds": 30}), "30 giây"),
+    (HTTPException(503, {"code": "irrigation_busy", "message": "Thiết bị đang xử lý lệnh khác; hãy thử lại."}), "đang xử lý"),
+])
+def test_chat_command_failures_are_explained(chat_env, monkeypatch, error, text):
+    client, _, _, _ = chat_env
+    monkeypatch.setattr(app.state, "manual_command", AsyncMock(side_effect=error), raising=False)
+    body = client.post("/chat", json={"message": "bật bơm"}).json()
+    assert body["command"] is None and text in body["reply"]
+
+
+def test_questions_about_the_pump_still_go_to_the_model(chat_env, monkeypatch):
+    client, _, captured, _ = chat_env
+    manual = AsyncMock()
+    monkeypatch.setattr(app.state, "manual_command", manual, raising=False)
+    body = client.post("/chat", json={"message": "có nên bật bơm không?"}).json()
+    manual.assert_not_awaited()
+    assert len(captured) == 1 and body["reply_source"] == "model" and body["command"] is None
+

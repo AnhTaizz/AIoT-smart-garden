@@ -127,6 +127,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.chat_client = httpx.AsyncClient(follow_redirects=False)
     app.state.weather_client = httpx.AsyncClient(follow_redirects=False)
     app.state.issue_irrigation_command = issue_command
+    app.state.manual_command = manual_command
     try:
         yield
     finally:
@@ -297,6 +298,17 @@ def _iso(value: datetime) -> str:
 async def create_command(
     device_id: DevicePath, body: CommandCreate, request: Request, _session: OperatorDep
 ) -> dict[str, Any]:
+    return await manual_command(device_id, body, request)
+
+
+async def manual_command(
+    device_id: str, body: CommandCreate, request: Request
+) -> dict[str, Any]:
+    """Operator command shared by the dashboard button and chat commands.
+
+    Callers must have checked the operator role. A manual command always turns
+    AI AUTO off first, like switching to MANUAL.
+    """
     async with irrigation.device_lock(request.app.state.pool, device_id) as conn:
         await irrigation.disable(conn, device_id)
         if body.action == "pump_on":

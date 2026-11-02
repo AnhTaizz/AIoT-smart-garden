@@ -2,7 +2,7 @@
 
 Chatbot trên nhánh `finetuneAI` dùng model **ToanPhamAIEngi/Qwen3-8B-Vietnam-MultiDomainEdu** được chủ dự án host trên Kaggle. Người dùng mở nút **Trợ lý nông nghiệp** trên dashboard, đặt câu hỏi hoặc chọn gợi ý. Khung chat nằm bên phải trên máy tính và mở gần toàn màn hình trên điện thoại.
 
-Chatbot hỗ trợ nhiều loại cây, hỏi loại cây/giai đoạn/giá thể khi cần, và giải thích dữ liệu vườn. Chatbot không điều khiển bơm. Camera, nhận diện ảnh, RAG và huấn luyện lại không thuộc thay đổi này.
+Chatbot hỗ trợ nhiều loại cây, hỏi loại cây/giai đoạn/giá thể khi cần, và giải thích dữ liệu vườn. Model không điều khiển bơm; riêng lệnh bật/tắt rõ ràng được xử lý tất định (xem [Lệnh bơm trong chat](#lệnh-bơm-trong-chat)). Camera, nhận diện ảnh, RAG và huấn luyện lại không thuộc thay đổi này.
 
 ## Cấu hình và chạy
 
@@ -90,6 +90,20 @@ Khi bật gửi dữ liệu và backend có dự báo Open-Meteo **fresh** (xem 
 Lỗi dùng `detail.code/message`: `chat_unavailable` (503), `chat_rate_limited` (503), `chat_timeout` (504), `chat_invalid_response` (502), `invalid_payload` (422). Không tự retry upstream. Người dùng chọn **Thử lại** hoặc **Sửa câu hỏi**, không nhân đôi lượt hỏi. Tạo hội thoại mới hủy request phía client; việc hủy có dừng được GPU generation hay không phụ thuộc server Kaggle.
 
 `reply_source=model` là lời tư vấn từ model. Khi phát hiện một số mâu thuẫn có thể kiểm tra (ví dụ bịa số đo khi cảm biến lỗi, khẳng định trạng thái bơm từ dữ liệu cũ hoặc nói đã bật bơm), backend thay câu trả lời bằng thông tin vườn được định dạng sẵn và trả `reply_source=garden_facts`. Giao diện ghi rõ nguồn thay thế, không coi đây là model trả lời đạt yêu cầu. Kiểm tra này dùng quy tắc giới hạn, không phát hiện được mọi lỗi kiến thức hay mọi cách diễn đạt sai.
+
+## Lệnh bơm trong chat
+
+Tin nhắn là lệnh rõ ràng thì backend **không gọi model** và gửi lệnh qua cùng hàm với nút điều khiển (`manual_command`: khóa thiết bị → tắt AI AUTO → `issue_command`, giữ rate limit `pump_on`, `COMMAND_MAX_DURATION_SECONDS`, MQTT QoS 1 không retained):
+
+| Tin nhắn | Lệnh |
+|---|---|
+| "bật cho tôi máy bơm", "mở bơm", "bat bom" | `pump_on` 10 giây (mặc định) |
+| "bật bơm 20 giây", "chạy bơm 15s", "bật bơm 1 phút" | `pump_on` 20 / 15 / 60 giây |
+| "tắt bơm", "dừng máy bơm", "dung bom" | `pump_off` |
+
+Không phải lệnh (model tư vấn như thường): câu hỏi (`?`, "có nên", "nên", "khi nào", "bao lâu", "tại sao", "thế nào", kết thúc bằng "không/chưa") và phủ định ("đừng/không/chưa bật bơm", không dấu "dung bat bom"). Chỉ role `operator` được gửi; viewer nhận câu từ chối. Thời lượng ngoài 1..`COMMAND_MAX_DURATION_SECONDS` bị từ chối, không tự cắt. Lỗi MQTT/rate limit/thiết bị bận được trả thành câu trả lời có lý do, không có `command`. Lệnh vẫn chạy khi chưa cấu hình `CHAT_API_URL`.
+
+Response có `reply_source: "device_command"` và `command` (cùng schema `CommandOut` của `POST /devices/{id}/commands`, `status: pending`). Câu trả lời chỉ nói đã **gửi** lệnh; giao diện chat theo dõi `GET /commands/{command_id}` tới `applied`/`rejected`/`timeout` và chỉ báo thành công khi ACK + state khớp lệnh. Với lời tư vấn, `command` là `null`.
 
 ## System prompt và giới hạn
 

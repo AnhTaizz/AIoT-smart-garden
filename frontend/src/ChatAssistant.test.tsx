@@ -1,11 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ChatAssistant from "./ChatAssistant";
-import { sendChat, type ChatReply } from "./api";
+import { fetchCommand, sendChat, type ChatReply, type CommandOut } from "./api";
 
 vi.mock("./api", async (importOriginal) => ({
   ...await importOriginal<typeof import("./api")>(),
   sendChat: vi.fn(),
+  fetchCommand: vi.fn(),
 }));
 
 const reply: ChatReply = {
@@ -139,4 +140,32 @@ describe("Trợ lý nông nghiệp", () => {
     ask();
     await screen.findByText(/Lời tư vấn của model chưa khớp dữ liệu/);
   });
+
+  it("follows a chat pump command to the device confirmation instead of trusting HTTP 202", async () => {
+    const pending: CommandOut = {
+      command_id: "c1", device_id: "node_01", command_sequence: 7, action: "pump_on", params: { duration_seconds: 10 },
+      target_boot_id: "boot", status: "pending", device_ack: null, reason: null, created_at: "2026-11-01T00:00:00Z",
+      expires_at: "2026-11-01T00:00:10Z", published_at: "2026-11-01T00:00:00Z", acked_at: null, ack_boot_id: null,
+      state_confirmed_at: null, confirmed_relay_state: null, confirmed_state_sequence: null, confirmed_boot_id: null,
+      finalized_at: null, late_ack: null, late_ack_at: null,
+    };
+    vi.mocked(sendChat).mockResolvedValue({ ...reply, reply: "Đã gửi lệnh bật bơm 10 giây.", reply_source: "device_command", command: pending });
+    vi.mocked(fetchCommand).mockResolvedValueOnce(pending).mockResolvedValueOnce({ ...pending, status: "applied", device_ack: "applied", confirmed_relay_state: "on" });
+    openChat();
+    ask("bật cho tôi máy bơm");
+    expect(await screen.findByText(/Đang chờ thiết bị xác nhận/)).toBeInTheDocument();
+    expect(await screen.findByText(/Thiết bị xác nhận đã bật bơm/, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(fetchCommand).toHaveBeenCalledWith("c1", expect.any(AbortSignal));
+  }, 10000);
+
+  it("shows a rejected chat pump command", async () => {
+    vi.mocked(sendChat).mockResolvedValue({
+      ...reply, reply: "Đã gửi lệnh tắt bơm.", reply_source: "device_command",
+      command: { command_id: "c2", device_id: "node_01", command_sequence: 8, action: "pump_off", params: {}, target_boot_id: null, status: "pending", device_ack: null, reason: null, created_at: "2026-11-01T00:00:00Z", expires_at: "2026-11-01T00:00:10Z", published_at: null, acked_at: null, ack_boot_id: null, state_confirmed_at: null, confirmed_relay_state: null, confirmed_state_sequence: null, confirmed_boot_id: null, finalized_at: null, late_ack: null, late_ack_at: null },
+    });
+    vi.mocked(fetchCommand).mockImplementation(async () => ({ ...(await vi.mocked(sendChat).mock.results[0].value).command!, status: "rejected", reason: "safety_lock" }));
+    openChat();
+    ask("tắt bơm");
+    expect(await screen.findByText(/Thiết bị từ chối lệnh: safety_lock/, {}, { timeout: 5000 })).toBeInTheDocument();
+  }, 10000);
 });

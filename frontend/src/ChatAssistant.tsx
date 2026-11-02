@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { sendChat, type ChatReply, type ChatTurn, type GardenContext } from "./api";
+import { fetchCommand, sendChat, type ChatReply, type ChatTurn, type CommandOut, type GardenContext } from "./api";
 import "./chat.css";
 
 interface Message extends ChatTurn {
@@ -61,6 +61,55 @@ function ContextDetails({ context }: { context: GardenContext }) {
         {context.warnings.map((warning) => <p className="chat-warning" key={warning}>{warning}</p>)}
       </div>
     </details>
+  );
+}
+
+const COMMAND_POLL_MS = 1500;
+
+function commandOutcome(command: CommandOut): string {
+  if (command.status === "pending") return "Đang chờ thiết bị xác nhận…";
+  if (command.status === "applied") {
+    return command.action === "pump_on" ? "Thiết bị xác nhận đã bật bơm (ACK + trạng thái khớp lệnh)." : "Thiết bị xác nhận đã tắt bơm.";
+  }
+  if (command.status === "rejected") return `Thiết bị từ chối lệnh${command.reason ? `: ${command.reason}` : "."}`;
+  return "Hết thời gian chờ; thiết bị chưa xác nhận lệnh.";
+}
+
+// HTTP 202 only means the backend published the command; follow it to ACK/state.
+function ChatCommandStatus({ initial }: { initial: CommandOut }) {
+  const [command, setCommand] = useState(initial);
+  const [lost, setLost] = useState(false);
+  useEffect(() => {
+    if (command.status !== "pending") return;
+    const controller = new AbortController();
+    let failures = 0;
+    let timer = 0;
+    const poll = async () => {
+      try {
+        const updated = await fetchCommand(command.command_id, controller.signal);
+        failures = 0;
+        setLost(false);
+        setCommand(updated);
+        if (updated.status === "pending") timer = window.setTimeout(poll, COMMAND_POLL_MS);
+      } catch {
+        if (controller.signal.aborted) return;
+        failures += 1;
+        if (failures < 5) timer = window.setTimeout(poll, COMMAND_POLL_MS);
+        else setLost(true);
+      }
+    };
+    timer = window.setTimeout(poll, COMMAND_POLL_MS);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [command.command_id, command.status]);
+  return (
+    <p className={`chat-command chat-command-${command.status}`} role="status">
+      <strong>{command.action === "pump_on" ? `Bật bơm ${command.params.duration_seconds ?? "?"} giây` : "Tắt bơm"}</strong>
+      {" · "}
+      {lost ? "Mất kết nối khi theo dõi lệnh; xem bảng điều khiển, không tự gửi lại." : commandOutcome(command)}
+    </p>
   );
 }
 
@@ -167,6 +216,7 @@ export default function ChatAssistant({ deviceId }: { deviceId: string }) {
                   <div className="chat-message-body">
                     {message.role === "assistant" ? <ReactMarkdown skipHtml disallowedElements={["img"]} components={{ a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" /> }}>{message.content}</ReactMarkdown> : <p>{message.content}</p>}
                   </div>
+                  {message.result?.command && <ChatCommandStatus initial={message.result.command} />}
                   {message.result && <ContextDetails context={message.result.context} />}
                 </article>
               ))}
@@ -180,7 +230,7 @@ export default function ChatAssistant({ deviceId }: { deviceId: string }) {
               <textarea id={inputId} ref={inputRef} rows={2} maxLength={4000} value={draft} placeholder="Hỏi về cây trồng hoặc số đo vườn…" disabled={pending || Boolean(failed)} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(draft); } }} />
               <button type="submit" className="chat-send" disabled={!draft.trim() || pending || Boolean(failed)} aria-label="Gửi câu hỏi"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 12 7-7 7 7M12 5v15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
             </div>
-            <div className="chat-composer-meta"><span>AI hỗ trợ tư vấn · Bạn chủ động điều khiển bơm</span><span>{draft.length}/4000</span></div>
+            <div className="chat-composer-meta"><span>AI chỉ tư vấn · Gõ "bật bơm 10 giây" / "tắt bơm" để điều khiển</span><span>{draft.length}/4000</span></div>
           </form>
         </section>
       )}

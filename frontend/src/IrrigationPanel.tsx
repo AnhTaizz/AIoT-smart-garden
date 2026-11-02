@@ -4,11 +4,12 @@ import { irrigationRequest } from "./api";
 interface Policy {
   crop: string; stage: string; substrate: string; moisture_stop_pct: number;
   max_pulse_seconds: number; cooldown_seconds: number; daily_budget_seconds: number; evaluation_seconds: number;
+  force_water_below_pct?: number | null;
 }
 interface Data {
   execution_scope: "simulator_only" | "real_device";
   profile: { enabled: boolean; policy: Policy; last_status: string } | null;
-  decisions: { id: string; created_at: string; status: string; reason: string; proposal: { water: boolean; duration_seconds: number; reason: string } | null; command_status: string | null; command_id: string | null; confirmed_relay_state: string | null }[];
+  decisions: { id: string; created_at: string; status: string; reason: string; proposal: { water: boolean; duration_seconds: number; reason: string } | null; decision_source?: "rule" | "ai" | null; command_status: string | null; command_id: string | null; confirmed_relay_state: string | null }[];
 }
 
 export default function IrrigationPanel({ deviceId }: { deviceId: string }) {
@@ -41,7 +42,8 @@ export default function IrrigationPanel({ deviceId }: { deviceId: string }) {
     if (enabled && (connected !== true || !knownScope || (realDevice && !realConfirmed))) return;
     if (!form.current?.reportValidity()) return;
     const values = new FormData(form.current);
-    const policy = Object.fromEntries([...values.entries()].map(([key, value]) => [key, ["crop", "stage", "substrate"].includes(key) ? value : Number(value)]));
+    // An empty "Luật ngưỡng" field turns the rule off (null), never 0 %.
+    const policy = Object.fromEntries([...values.entries()].map(([key, value]) => [key, ["crop", "stage", "substrate"].includes(key) ? value : key === "force_water_below_pct" && value === "" ? null : Number(value)]));
     setBusy(true); setError("");
     actionPending.current = true;
     const current = ++generation.current;
@@ -65,6 +67,7 @@ export default function IrrigationPanel({ deviceId }: { deviceId: string }) {
           ['daily_budget_seconds', 'Ngân sách AUTO / 24h (giây)', 1, 600],
           ['evaluation_seconds', 'Chu kỳ đánh giá (giây)', 30, 3600],
         ] as const).map(([key, title, min, max]) => <label key={key}>{title}<input name={key} type="number" required min={min} max={max} step={key === 'moisture_stop_pct' ? 'any' : 1} defaultValue={data?.profile?.policy[key] ?? ""} style={{ width: "100%" }} /></label>)}
+        <label>Luật ngưỡng: tưới 10 giây khi ẩm đất dưới (%) — để trống là tắt<input name="force_water_below_pct" type="number" min={0} max={100} step="any" defaultValue={data?.profile?.policy.force_water_below_pct ?? ""} style={{ width: "100%" }} /></label>
       </fieldset>
       {realDevice && !data?.profile?.enabled && <label style={{ display: "block", marginTop: 16 }}>
         <input type="checkbox" checked={realConfirmed} disabled={busy} onChange={event => setRealConfirmed(event.target.checked)} />
@@ -85,11 +88,11 @@ export default function IrrigationPanel({ deviceId }: { deviceId: string }) {
     {error && <p role="alert">{error}</p>}
     <p>Trạng thái điều phối: {data?.profile?.last_status ?? "Chưa cấu hình"}. Mỗi quyết định hợp lệ vẫn có thể bị chặn bởi thời gian nghỉ hoặc ngân sách tưới.</p>
     <h3>Quyết định và kết quả thực hiện gần đây</h3>
-    {!data?.decisions?.length && <p>Chưa có quyết định AI.</p>}
+    {!data?.decisions?.length && <p>Chưa có quyết định AI hoặc luật ngưỡng.</p>}
     <ul>{data?.decisions?.slice(0, 5).map(item => <li key={item.id} style={{ marginBottom: 12 }}>
       <strong>{item.status}</strong> · {new Date(item.created_at).toLocaleString("vi-VN")}<br />
       {item.reason}<br />
-      {item.proposal && <>AI: {item.proposal.water ? `Đề xuất tưới ${item.proposal.duration_seconds}s` : "Không tưới"} — {item.proposal.reason}<br /></>}
+      {item.proposal && <>{item.decision_source === "rule" ? "Luật ngưỡng" : "AI"}: {item.proposal.water ? `Đề xuất tưới ${item.proposal.duration_seconds}s` : "Không tưới"} — {item.proposal.reason}<br /></>}
       {item.command_id && <>Lệnh: {item.command_id} · {item.command_status ?? "Chưa xác nhận"} · Relay xác nhận: {item.confirmed_relay_state ?? "Chưa có"}</>}
     </li>)}</ul>
   </section>;

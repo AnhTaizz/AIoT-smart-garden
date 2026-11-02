@@ -6,6 +6,7 @@ import LoginScreen from "./LoginScreen";
 import {
   clearSession,
   getSession,
+  setSession,
   subscribe,
   type AuthSession,
   type SessionEnd,
@@ -18,6 +19,7 @@ import {
   fetchRecentCommands,
   fetchSystemStatus,
   fetchTelemetryHistory,
+  login,
   logout,
   sendCommand,
   type BackendStatus,
@@ -34,6 +36,14 @@ const POLL_INTERVAL_MS = 5000;
 const COMMAND_POLL_INTERVAL_MS = 1000;
 const MAX_DURATION_SECONDS = 120;
 const MIN_DURATION_SECONDS = 1;
+
+// Demo sign-in is deliberately restricted to a local Vite development server.
+// Credentials stay in the ignored .env.local file and are never part of a
+// production bundle or repository source.
+const isLocalDemo =
+  import.meta.env.DEV
+  && (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+  && import.meta.env.VITE_DEMO_AUTO_LOGIN === "true";
 
 const emptyStatus: SystemStatus = {
   backend: "checking",
@@ -242,6 +252,7 @@ const roleLabels: Record<AuthSession["role"], string> = {
 export default function App() {
   const [session, setCurrent] = useState<AuthSession | null>(getSession);
   const [sessionEnd, setSessionEnd] = useState<SessionEnd | null>(null);
+  const demoLoginAttempted = useRef(false);
 
   useEffect(() => {
     setCurrent(getSession());
@@ -252,6 +263,25 @@ export default function App() {
     return () => {
       unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const username = import.meta.env.VITE_DEMO_USERNAME?.trim();
+    const password = import.meta.env.VITE_DEMO_PASSWORD;
+    if (!isLocalDemo || !username || !password || getSession() || demoLoginAttempted.current) return;
+
+    demoLoginAttempted.current = true;
+    void login(username, password).then(setSession).catch(() => {
+      // Let a local developer inspect the UI when the stack is not running.
+      // This is not a server session: every protected request still fails
+      // closed, so controls remain locked and no garden data is exposed.
+      setSession({
+        token: "local-ui-preview",
+        username: "Xem trước cục bộ",
+        role: "viewer",
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      });
+    });
   }, []);
 
   // Lock as soon as the server-given expiry passes; the server enforces it too.
@@ -1021,7 +1051,10 @@ function Dashboard({ session }: { session: AuthSession }) {
           </article>
         </section>
       </main>
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px' }}><WeatherCard /><IrrigationPanel deviceId={deviceId} /></div>
+      <section className="dashboard-extras" aria-label="Dự báo và điều phối tưới">
+        <WeatherCard />
+        <IrrigationPanel deviceId={deviceId} />
+      </section>
 
       <footer>
         <span>Smart Garden — AIoT Dashboard</span>

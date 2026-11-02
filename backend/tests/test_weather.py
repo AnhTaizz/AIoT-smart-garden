@@ -72,7 +72,9 @@ def test_valid_forecast_is_parsed_in_utc_and_summarized():
     assert query["hourly"] == "precipitation_probability,precipitation,temperature_2m"
     assert query["forecast_hours"] == "12" and query["timeformat"] == "unixtime"
 
-    out = weather.current_weather(app_, app_.state.weather_cache.fetched_at + timedelta(minutes=1))
+    # Pin "now" inside the fixed forecast window; the wall clock moves past START.
+    app_.state.weather_cache.fetched_at = NOW
+    out = weather.current_weather(app_, NOW + timedelta(minutes=1))
     assert out.status == "fresh" and out.reason is None and out.message is None
     assert out.kind == "forecast" and out.provider == "open-meteo"
     assert out.hours[0].time.tzinfo is not None and out.hours[0].time.utcoffset() == timedelta(0)

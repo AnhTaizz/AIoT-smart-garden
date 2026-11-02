@@ -92,6 +92,8 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
+> ESP32-CAM và xử lý ảnh/AI ảnh đã được nhóm **loại khỏi phạm vi** ngày 2026-11-02 do không đủ thời gian; các task dưới đây không còn thực hiện.
+
 ### A-W4-01 — Camera định kỳ và bộ ảnh thực
 
 - **Owner:** Thành. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
@@ -99,7 +101,7 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 - **Đầu ra:** Lịch chụp, vùng chụp, ảnh gốc có metadata.
 - **Tiêu chí nghiệm thu:** Ảnh mới đến backend với timestamp/device_id; thử upload lỗi và phục hồi; giao ảnh cho Toản (C).
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### A-W4-02 — Baseline độ phủ xanh và hỗ trợ dữ liệu
@@ -109,7 +111,7 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 - **Đầu ra:** Script HSV; ảnh mask; mô tả giới hạn.
 - **Tiêu chí nghiệm thu:** Có ảnh/mask/độ phủ để đối chiếu; thử thay đổi ánh sáng; không gắn độ phủ với chẩn đoán bệnh; giao Tài/Toản tích hợp.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
@@ -125,7 +127,7 @@ Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 - **Đầu ra:** Log camera và bộ ảnh kiểm thử thực.
 - **Tiêu chí nghiệm thu:** Ghi ảnh mờ/tối/lỗi upload; Toản (C) nhận được bộ ảnh chưa dùng để train/tune; báo thiếu dữ liệu nếu có.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### A-W5-02 — Ổn định thiết bị khi chạy chung

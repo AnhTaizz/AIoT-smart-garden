@@ -117,6 +117,8 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
+> ESP32-CAM và xử lý ảnh/AI ảnh đã được nhóm **loại khỏi phạm vi** ngày 2026-11-02 do không đủ thời gian; các task dưới đây không còn thực hiện.
+
 ### B-W4-01 — API nhận/lưu ảnh và danh sách ảnh
 
 - **Owner:** Tài. **Reviewer:** Toản. **Ước lượng:** 4 giờ.
@@ -124,7 +126,7 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 - **Đầu ra:** Image endpoint, metadata và trạng thái xử lý.
 - **Tiêu chí nghiệm thu:** Kiểm tra file/kích thước theo cấu hình; ảnh lỗi không làm dừng dịch vụ; Thành (A) upload được và Toản (C) đọc danh sách.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### B-W4-02 — Hỗ trợ giao diện ảnh và giao tiếp inference
@@ -134,7 +136,7 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 - **Đầu ra:** Khung UI ảnh theo thiết kế C; giao tiếp model.
 - **Tiêu chí nghiệm thu:** Toản (C) review khung UI; chốt input/output, nhãn, version và lỗi inference; chạy được mock trước khi có model.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
@@ -150,7 +152,7 @@ Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 - **Đầu ra:** Module/service inference; cấu hình model; kết quả trong DB.
 - **Tiêu chí nghiệm thu:** Dùng artifact Toản (C) bàn giao; lưu version; timeout/lỗi được ghi; yêu cầu ảnh không chặn API điều khiển trong kịch bản thử.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### B-W5-02 — Ổn định dịch vụ và cấu hình triển khai

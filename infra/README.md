@@ -50,4 +50,4 @@ Dừng container nhưng giữ dữ liệu PostgreSQL:
 docker compose down
 ```
 
-ESP32/ESP32-CAM chạy firmware trên thiết bị, không chạy trong container. `docs/INTERFACES.md` hiện là G02 AGREED; TASK-000B chỉ là lịch sử bootstrap, không phải trạng thái contract hiện tại.
+ESP32 chạy firmware trên thiết bị, không chạy trong container. `docs/INTERFACES.md` hiện là G02 AGREED; TASK-000B chỉ là lịch sử bootstrap, không phải trạng thái contract hiện tại.

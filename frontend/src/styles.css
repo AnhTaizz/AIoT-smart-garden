@@ -541,7 +541,7 @@ h2 {
 /* Details & Controls Grid */
 .details-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   margin-top: 24px;
 }
@@ -957,42 +957,6 @@ h2 {
 .command-status-badge.status-timeout {
   background: #fef3c7;
   color: #b45309;
-}
-
-/* Camera Card */
-.image-placeholder {
-  display: flex;
-  min-height: 228px;
-  margin-top: 20px;
-  border: 1px dashed #cad7ce;
-  border-radius: 16px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  color: var(--muted);
-  background:
-    linear-gradient(rgba(247, 250, 247, 0.86), rgba(247, 250, 247, 0.86)),
-    repeating-linear-gradient(45deg, #edf3ef 0, #edf3ef 10px, #f7faf8 10px, #f7faf8 20px);
-  text-align: center;
-  padding: 24px;
-}
-
-.image-placeholder svg {
-  width: 48px;
-  margin-bottom: 12px;
-  fill: #a8b6ae;
-}
-
-.image-placeholder strong {
-  margin-bottom: 6px;
-  color: #52655c;
-  font-size: 0.95rem;
-}
-
-.image-placeholder span {
-  max-width: 280px;
-  font-size: 0.78rem;
-  line-height: 1.5;
 }
 
 /* Footer */

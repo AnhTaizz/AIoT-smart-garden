@@ -26,7 +26,7 @@ xuất rõ ràng, nhưng phải giữ trạng thái “chưa chốt” cho tới
 ESP32/simulator -> MQTT -> FastAPI -> PostgreSQL -> ReactJS web
 ReactJS production build -> Capacitor -> Android WebView/APK
 browser/Android -> REST/WebSocket -> FastAPI -> MQTT -> ESP32 -> ACK/state
-ESP32-CAM -> backend -> image/AI -> backend/ReactJS                 (phase sau)
+FastAPI -> Kaggle LLM (chatbot tư vấn, quyết định tưới AUTO)
 ```
 
 - Laptop chạy React/Nginx, FastAPI, Mosquitto và PostgreSQL bằng Docker Compose.
@@ -137,6 +137,9 @@ API, enum, đơn vị hoặc command lifecycle:
 
 ### AI (`ai/`)
 
+- ESP32-CAM và xử lý ảnh/AI ảnh đã loại khỏi phạm vi (nhóm chốt 2026-11-02).
+  `ai/` hiện chứa server Kaggle cho chatbot và quyết định tưới; các quy tắc dữ
+  liệu bên dưới áp dụng nếu nhóm bổ sung lại bài toán dữ liệu/model.
 - Chỉ bắt đầu tích hợp sau khi core IoT đạt điều kiện roadmap.
 - Ghi nguồn/quyền dữ liệu, manifest, quy tắc nhãn và split train/validation/test;
   tránh rò rỉ dữ liệu giữa các split.

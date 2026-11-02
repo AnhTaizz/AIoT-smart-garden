@@ -38,14 +38,14 @@ với adapter bơm đã rút. Chưa nghiệm thu firmware mới trên board th�
 
 ## Phạm vi sản phẩm
 
-Một khu vực trồng thử nghiệm, ESP32, cảm biến đất Capacitive v1.2, AHT20, relay/bơm, ESP32-CAM. Luồng chính: cảm biến → ESP32 → MQTT/Mosquitto → FastAPI → PostgreSQL → React. Lệnh điều khiển đi ngược về ESP32 và phải có ACK/state để giao diện không suy đoán trạng thái thiết bị. Camera gửi ảnh tới backend để xử lý trên laptop.
+Một khu vực trồng thử nghiệm, ESP32, cảm biến đất Capacitive v1.2, AHT20, relay/bơm. Luồng chính: cảm biến → ESP32 → MQTT/Mosquitto → FastAPI → PostgreSQL → React. Lệnh điều khiển đi ngược về ESP32 và phải có ACK/state để giao diện không suy đoán trạng thái thiết bị.
 
-Mục tiêu bắt buộc: giám sát, lưu lịch sử, điều khiển Manual/Auto từ laptop hoặc điện thoại, tưới có giới hạn và xử lý lỗi cơ bản. Phải hoàn thành luồng IoT end-to-end trước khi tích hợp AI. ESP32-CAM và một bài toán AI baseline nhỏ có đánh giá bắt đầu ở tuần 4; độ phủ xanh bằng HSV là baseline xử lý ảnh, không được gọi là mô hình ML đã huấn luyện. Nhiều khu vực trồng và tối ưu nâng cao không thuộc core scope; Weather API là mở rộng W3 theo yêu cầu chủ dự án, chỉ đọc dự báo và không tự bật bơm.
+Mục tiêu bắt buộc: giám sát, lưu lịch sử, điều khiển Manual/Auto từ laptop hoặc điện thoại, tưới có giới hạn và xử lý lỗi cơ bản. Phải hoàn thành luồng IoT end-to-end trước khi tích hợp AI. AI gồm chatbot tư vấn và quyết định tưới AUTO qua model Kaggle. ESP32-CAM và xử lý ảnh đã được nhóm loại khỏi phạm vi ngày 2026-11-02 do không đủ thời gian. Nhiều khu vực trồng và tối ưu nâng cao không thuộc core scope; Weather API là mở rộng W3 theo yêu cầu chủ dự án, chỉ đọc dự báo và không tự bật bơm.
 
 ## Kiến trúc hiện hành
 
 ```text
-ESP32 / ESP32-CAM ──MQTT──> Mosquitto ──> FastAPI ──> PostgreSQL
+ESP32 ──────────────MQTT──> Mosquitto ──> FastAPI ──> PostgreSQL
                                 ^              │
                                 │              └── REST / WebSocket
                                 │                         │

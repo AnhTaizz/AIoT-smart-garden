@@ -16,7 +16,7 @@ Người điều phối: chưa chọn. Ngày bắt đầu tuần 1: chưa chốt
 | --- | --- | --- | --- |
 | Thành (A) | ESP32, sensor, relay/bơm, firmware, MQTT device, reconnect/watchdog/fail-safe, Manual/Auto cục bộ, calibration và hardware integration | Firmware, sơ đồ nối dây, hiệu chuẩn, log và kiểm thử thiết bị thật | Tài (B) |
 | Tài (B) | Mosquitto, FastAPI, PostgreSQL, telemetry, command/ACK/state, REST/WebSocket, backend security/deployment, API contract; Capacitor, Android toolchain, sync/build và APK | Backend/schema, hướng dẫn chạy, log tích hợp; Android project và APK khi đạt DoD | Toản (C); phối hợp Thành (A) cho giao tiếp thiết bị |
-| Toản (C) | ReactJS responsive/mobile-first, dashboard/history/control UX, camera page, dữ liệu/nhãn ảnh, CV/AI và hiển thị kết quả | Một frontend ReactJS dùng cho web và Capacitor; pipeline/đánh giá AI | Tài (B); phối hợp Thành (A) cho dữ liệu camera |
+| Toản (C) | ReactJS responsive/mobile-first, dashboard/history/control UX, chatbot/model AI và hiển thị kết quả | Một frontend ReactJS dùng cho web và Capacitor; pipeline/đánh giá AI | Tài (B) |
 
 Mỗi người viết và trình bày phần mình thực hiện. Người điều phối tổng hợp tiến độ, điều chỉnh ưu tiên và thống nhất tài liệu; không làm thay báo cáo của cả nhóm.
 
@@ -24,6 +24,7 @@ Mỗi người viết và trình bày phần mình thực hiện. Người đi�
 
 - Tuần 1: G02 đã AGREED; backend/simulator/React đã merge và M1 Web/LAN đã được nghiệm thu trên browser điện thoại. Tài chuyển sang M1.5 để smoke-test môi trường Capacitor và dựng Android packaging.
 - Tuần 2–3: Thành tập trung phần cứng. Tài hỗ trợ log/tích hợp và dựng Capacitor/Android platform; Toản giữ React mobile-first và kiểm tra trên điện thoại thật. Không để Thành tự kiểm tra toàn bộ mạch.
+- ESP32-CAM/xử lý ảnh: Loại khỏi phạm vi (nhóm chốt 2026-11-02); kế hoạch tuần 4–5 bên dưới chỉ còn là lịch sử.
 - Tuần 4: Toản tập trung mô hình và đánh giá. Thành phụ trách ảnh thực, vùng chụp và baseline HSV; Tài xây API ảnh và hỗ trợ khung hiển thị ảnh trên React theo thống nhất với Toản.
 - Tuần 5: Tài đóng gói inference; Toản tập trung đánh giá và tích hợp UI; Thành thử camera trong điều kiện thực và hỗ trợ bộ ảnh kiểm thử.
 - Tuần 6–7: mỗi người kiểm thử phần mình sở hữu, kiểm tra chéo và diễn tập luồng chung.

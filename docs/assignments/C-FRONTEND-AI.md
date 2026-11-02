@@ -102,6 +102,8 @@ Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở h�
 
 Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đánh giá ban đầu.
 
+> ESP32-CAM và xử lý ảnh/AI ảnh đã được nhóm **loại khỏi phạm vi** ngày 2026-11-02 do không đủ thời gian; các task dưới đây không còn thực hiện.
+
 ### C-W4-01 — Huấn luyện baseline ML nhỏ
 
 - **Owner:** Toản. **Reviewer:** Tài. **Ước lượng:** 4 giờ.
@@ -109,7 +111,7 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 - **Đầu ra:** Quyết định nhãn/split, manifest dữ liệu, script huấn luyện/inference, model, cấu hình và seed.
 - **Tiêu chí nghiệm thu:** Chạy được pipeline; truy được nguồn/nhãn; chọn model bằng validation; ghi phiên bản dataset và tham số; giữ test cho đánh giá.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### C-W4-02 — Đánh giá baseline và bàn giao cho Tài (B)
@@ -119,7 +121,7 @@ Mục tiêu chung: ESP32-CAM → backend → xử lý ảnh; AI baseline có đ�
 - **Đầu ra:** Bảng precision/recall/F1, confusion matrix, lỗi mẫu.
 - **Tiêu chí nghiệm thu:** Có số lượng mẫu từng lớp; tách kết quả test công khai và ảnh thực; Tài (B) chạy được ví dụ inference theo hướng dẫn.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).
@@ -135,7 +137,7 @@ Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 - **Đầu ra:** Ảnh gần nhất, lịch sử, nhãn/độ phủ, trạng thái lỗi.
 - **Tiêu chí nghiệm thu:** Kết quả gắn đúng ảnh và phiên bản model; không suy diễn confidence là độ chính xác hay chẩn đoán chắc chắn.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 ### C-W5-02 — Đánh giá ảnh thật và một đợt cải tiến có giới hạn
@@ -145,7 +147,7 @@ Mục tiêu chung: Full integration IoT, mobile dashboard, camera và AI.
 - **Đầu ra:** Bảng trước/sau; lỗi điển hình; phạm vi sử dụng.
 - **Tiêu chí nghiệm thu:** Cải tiến dựa trên validation riêng; không tune trên test; nếu dùng test để sửa thì phải có holdout mới hoặc công khai hạn chế.
 - **Bàn giao:** commit/PR, cách chạy/kiểm tra và log/ảnh/video hoặc bảng kết quả liên quan; không chứa thông tin đăng nhập thật.
-- **Trạng thái:** Backlog.
+- **Trạng thái:** Loại khỏi phạm vi (nhóm chốt 2026-11-02).
 - **Issue / PR / bằng chứng:** chưa có.
 
 Cuối tuần: tham gia demo chung, cập nhật phần báo cáo mình sở hữu và ghi vấn đề tuần sau theo [mẫu review](../templates/WEEKLY_REVIEW.md).

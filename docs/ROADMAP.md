@@ -30,9 +30,9 @@ Không nâng milestone chỉ từ tên branch, tài liệu thiết kế, HTTP `2
 | Backend core | `[x] DONE` cho phạm vi software M1 | PR #2 đã merge; MQTT ingest, PostgreSQL migrations, latest/history REST, command/ACK/state persistence và validation có trong `backend/` | Auth, WebSocket, API mode/AUTO, image/AI API và real-device integration chưa có |
 | Reference simulator | `[x] DONE` | Bốn topic v1; chống replay/trùng; OFF ưu tiên; fail-safe khi mất MQTT; 31/31 unit tests pass | Không thay thế firmware/phần cứng thật |
 | Embedded / hardware | `[ ] TODO` | `firmware/` chỉ có README | Firmware ESP32, sensor, relay/bơm, clock sync, reconnect và test phần cứng thật |
-| ReactJS web | `[x] DONE` cho MVP M1 | PR #3 đã merge; telemetry/history, device state, pump command lifecycle, responsive CSS; 5/5 tests, production build và M1 browser/LAN E2E đã được nghiệm thu | Mode control, auth, WebSocket và camera/AI thật là phạm vi sau M1 |
+| ReactJS web | `[x] DONE` cho MVP M1 | PR #3 đã merge; telemetry/history, device state, pump command lifecycle, responsive CSS; 5/5 tests, production build và M1 browser/LAN E2E đã được nghiệm thu | Mode control, auth và WebSocket là phạm vi sau M1 |
 | M1.5 — Android Packaging & Mobile Integration | `[!] BLOCKED` | M1.5A PASS: Capacitor 8.5.2, persistent SDK, Android platform, cap sync, Gradle debug build, APK 4.08 MiB; Docker/LAN telemetry PASS từ laptop | Chờ physical phone để install/launch và xác nhận FastAPI LAN, telemetry, command, ACK/state trên app |
-| Camera / AI | `[ ] TODO` | `ai/` và camera UI mới là mô tả/placeholder | ESP32-CAM, image API, dataset, baseline, evaluation và UI kết quả |
+| Camera / AI ảnh | `[-] DROPPED` | Loại khỏi phạm vi (nhóm chốt 2026-11-02) do không đủ thời gian | Không còn thực hiện |
 | End-to-end integration | `[x] DONE` cho M1 Web/LAN | Nhóm đã nghiệm thu React → FastAPI → MQTT/Mosquitto → simulator → ACK/state → React trên browser điện thoại qua LAN | M1.5 Android app và M2+ phần cứng vẫn chưa làm |
 
 ### Bằng chứng audit mới nhất
@@ -49,7 +49,7 @@ Không nâng milestone chỉ từ tên branch, tài liệu thiết kế, HTTP `2
 Kiến trúc mục tiêu hiện hành:
 
 ```text
-ESP32 / ESP32-CAM
+ESP32
         |
         | MQTT: telemetry / control / ack / state
         v
@@ -143,7 +143,6 @@ Chi tiết payload, validation và REST nằm trong [INTERFACES](INTERFACES.md).
 - `[x]` Pump ON/OFF và `pending/applied/rejected/timeout` với simulator cho M1; kiểm tra ESP32 thật thuộc M2.
 - `[ ]` UI chuyển Manual/Auto; hiện chỉ hiển thị mode do device state báo.
 - `[ ]` Login/authentication chỉ thêm nếu G01 xác nhận auth nằm trong scope.
-- `[ ]` Camera/AI page thật; hiện chỉ là placeholder “Chưa triển khai”.
 - `[ ]` WebSocket realtime; hiện polling 5 giây và command polling 1 giây.
 - `[x]` Responsive/mobile browser verification cho M1 trên điện thoại thật qua LAN.
 - `[ ]` Accessibility review chuyên biệt ngoài tiêu chí M1 tối thiểu.
@@ -184,6 +183,8 @@ Emulator là optional. Ưu tiên điện thoại thật để tránh tải đồ
 
 ### Phase 5 — Camera / AI
 
+> ESP32-CAM và xử lý ảnh/AI ảnh đã được nhóm **loại khỏi phạm vi** ngày 2026-11-02 do không đủ thời gian; các task dưới đây không còn thực hiện.
+
 - `[ ]` ESP32-CAM capture/upload và metadata.
 - `[ ]` Backend image storage/list/latest API.
 - `[ ]` Chốt dataset/labels/split và baseline phù hợp.
@@ -197,7 +198,6 @@ Emulator là optional. Ưu tiên điện thoại thật để tránh tải đồ
 - `[ ]` Một phiên M2 với ESP32/sensor/relay/bơm thật.
 - `[ ]` Mất MQTT khi ON, replay cũ, timeout, reboot và STOP được kiểm tra trên thiết bị thật.
 - `[ ]` React/Capacitor Android → REST/WebSocket → FastAPI → MQTT → ESP32.
-- `[ ]` Camera/AI tích hợp mà không ảnh hưởng control path.
 
 ### Phase 7 — Demo / Report / Final Hardening
 
@@ -215,8 +215,8 @@ Tuần là mốc tương đối từ ngày nhóm bắt đầu; chưa có ngày l
 | 1 | Software M1: backend, simulator, React | `[x]` | G02 AGREED; backend/simulator và React đã merge; M1 Web/LAN E2E trên browser điện thoại đã được nhóm nghiệm thu. |
 | 2 | ESP32 thật + Android skeleton | `[~]` | Android skeleton/debug APK đã build; A vẫn cần đưa telemetry/control lên ESP32, B cần cài APK và test LAN trên điện thoại thật, C giữ UI responsive. |
 | 3 | Manual/Auto + safety + mobile integration + **Weather-aware Auto (PROPOSED 2026-10-31)** | `[ ]` | A hoàn thiện device state machine/fail-safe; B nối Android tới backend và (sau khi contract được duyệt) Weather read-only/advisory; C thêm mode/control UX và Weather Card. Test disconnect/replay/STOP trên phần cứng; weather fresh/stale/unavailable chỉ được hoãn, không kích ON. |
-| 4 | Camera/AI baseline + Android integration | `[ ]` | Debug APK đã build sớm ở M1.5A; còn cài/mở/gọi REST trên phone, image API, dữ liệu ảnh và camera/AI UI. |
-| 5 | Full integration | `[ ]` | React MVP sync vào Capacitor; Android control/ACK-state; camera/AI tích hợp; đóng phạm vi. |
+| 4 | Android integration (camera/AI ảnh đã loại 2026-11-02) | `[ ]` | Debug APK đã build sớm ở M1.5A; còn cài/mở/gọi REST trên phone. |
+| 5 | Full integration | `[ ]` | React MVP sync vào Capacitor; Android control/ACK-state; đóng phạm vi. |
 | 6 | Hardening | `[ ]` | Test kéo dài, network failures, dependency/security audit, Android physical-device regression; release APK chỉ khi cấu hình sẵn sàng. |
 | 7 | Bàn giao | `[ ]` | Demo trên smartphone/ESP32 thật, README, report, slide, video, artifact/version và phương án hotspot dự phòng. |
 
@@ -250,10 +250,10 @@ G02/backend contract ổn định
 - Ưu tiên tiếp theo: kết nối điện thoại thật → cài debug APK → launch → cấu hình LAN API/CORS tối thiểu → kiểm tra telemetry → control/ACK-state.
 - B không mặc định sở hữu toàn bộ UI design; dùng ReactJS do C phát triển.
 
-### C — Toản — Frontend + Camera/AI
+### C — Toản — Frontend + AI
 
-- Sở hữu ReactJS responsive/mobile-first, dashboard/history/control UX, camera page, application-side ESP32-CAM integration phù hợp, CV/AI pipeline và hiển thị AI result.
-- Ưu tiên tiếp theo: tiếp tục UI responsive/mobile-first → bổ sung Manual/Auto khi backend/device hỗ trợ → phối hợp B kiểm tra cùng React build trong M1.5 → chuẩn bị camera/CV/AI sau core IoT.
+- Sở hữu ReactJS responsive/mobile-first, dashboard/history/control UX, chatbot/model AI và hiển thị kết quả AI. Camera/CV đã loại khỏi phạm vi (2026-11-02).
+- Ưu tiên tiếp theo: tiếp tục UI responsive/mobile-first → bổ sung Manual/Auto khi backend/device hỗ trợ → phối hợp B kiểm tra cùng React build trong M1.5.
 - C duy trì một codebase ReactJS để B đóng gói bằng Capacitor; không tạo frontend mobile riêng.
 
 ### Mở rộng W3 — dự báo thời tiết tham gia Auto (đề xuất chờ A/C review)

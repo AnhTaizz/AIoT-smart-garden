@@ -196,7 +196,7 @@ describe("Dashboard", () => {
     expect(screen.getByTestId("database-status")).toHaveTextContent(
       "Không thể kiểm tra",
     );
-    expect(screen.getAllByText("Chưa có dữ liệu")).toHaveLength(5);
+    expect(screen.getAllByText("Chưa có dữ liệu")).toHaveLength(4);
     expect(screen.getByRole("button", { name: "Bật bơm" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Tắt bơm" })).toBeDisabled();
   });

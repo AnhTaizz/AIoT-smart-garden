@@ -40,7 +40,7 @@ Cập nhật: **2026-09-30**. Nguồn trạng thái chi tiết và Definition of
 | Embedded | `[ ] TODO` | `firmware/` chỉ có README; chưa có bằng chứng ESP32/sensor/relay/bơm |
 | ReactJS | `[x] DONE` cho MVP M1 | UI nghiệp vụ, tests/build và phiên E2E qua browser điện thoại trên LAN đã được nhóm nghiệm thu; các màn hình sau M1 còn mở |
 | Android/Capacitor — M1.5 | `[!] BLOCKED` | M1.5A packaging và laptop-side Docker/LAN validation đã PASS; không có thiết bị trong `adb devices -l`, nên chưa thể nghiệm thu app trên điện thoại thật |
-| Camera/AI | `[ ] TODO` | Chưa có code/dataset/model/image API; UI camera là placeholder |
+| Camera/AI ảnh | `[-] DROPPED` | Loại khỏi phạm vi (nhóm chốt 2026-11-02) do không đủ thời gian |
 | Integration | `[x] DONE` cho M1 Web/LAN | Nhóm đã nghiệm thu luồng React → FastAPI → MQTT/Mosquitto → simulator → ACK/state → React trên browser điện thoại qua LAN |
 
 ## Những gì đã xác minh DONE
@@ -89,7 +89,6 @@ Cập nhật: **2026-09-30**. Nguồn trạng thái chi tiết và Definition of
 - Cài debug APK trên điện thoại thật; REST/control/ACK-state test từ Android app và xác minh CORS cho origin thực tế.
 - Release APK/signing chưa thuộc M1.5A; production tiếp tục hướng tới HTTPS/WSS.
 - Auth (chưa chốt scope) và WebSocket (chưa implement; frontend hiện polling).
-- ESP32-CAM, image API/storage, dataset/model/evaluation và AI UI thật.
 - M2–M7, hardening, security, report/demo artifacts.
 
 ## Milestone
@@ -100,8 +99,8 @@ Cập nhật: **2026-09-30**. Nguồn trạng thái chi tiết và Definition of
 | M1.5 — Android Packaging & Mobile Integration | `[!] BLOCKED` | M1.5A PASS; SDK persistent; React 5/5, cap sync, Gradle debug build, APK 4.08 MiB và laptop-side Docker/LAN telemetry PASS | Chờ điện thoại thật để install/launch và xác nhận FastAPI LAN, telemetry, pump command, ACK/state trên app |
 | M2 — Phần cứng thật | `[ ] TODO` | Không có | ESP32/sensor/relay/bơm + phone control |
 | M3 — Manual/Auto an toàn | `[ ] TODO` | Simulator reference không đủ | Firmware/device thật và failure tests |
-| M4 — ESP32-CAM/AI baseline | `[ ] TODO` | Không có | Ảnh thật, pipeline, model/evaluation |
-| M5 — Tích hợp đầy đủ | `[ ] TODO` | Không có | IoT + React/Android + camera/AI |
+| M4 — ESP32-CAM/AI baseline | `[-] DROPPED` | Loại khỏi phạm vi (nhóm chốt 2026-11-02) | Không còn thực hiện |
+| M5 — Tích hợp đầy đủ | `[ ] TODO` | Không có | IoT + React/Android |
 | M6 — Hardening | `[ ] TODO` | Không có | Chạy kéo dài, recovery/security/results |
 | M7 — Bàn giao | `[ ] TODO` | Không có | APK, demo thật, report/slide/video |
 
@@ -110,7 +109,7 @@ Cập nhật: **2026-09-30**. Nguồn trạng thái chi tiết và Definition of
 1. B kết nối điện thoại Android thật, bật USB debugging, xác nhận `adb devices -l` trả status `device`, rồi cài APK debug.
 2. B+C build với API base URL LAN runtime bằng env/config; ưu tiên `http://<LAPTOP_LAN_IP>:<FRONTEND_LAN_PORT>/api` qua Nginx hiện có, xác minh CORS theo origin thực tế trên phone, không dùng `localhost` hoặc hard-code IP.
 3. A chốt G03 rồi triển khai ESP32/sensor/relay với boot-OFF, local timeout, clock sync và reconnect safety.
-4. C tiếp tục React mobile-first, Manual/Auto UX khi backend/device hỗ trợ, rồi camera/CV/AI theo dependency.
+4. C tiếp tục React mobile-first, Manual/Auto UX khi backend/device hỗ trợ.
 5. Auth/WebSocket chỉ triển khai khi scope/need được chốt; không coi là điều kiện của M1 hoặc M1.5 nếu chưa nằm trong scope.
 
 ## Nhật ký quyết định

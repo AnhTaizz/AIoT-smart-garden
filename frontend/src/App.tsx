@@ -1019,24 +1019,6 @@ function Dashboard({ session }: { session: AuthSession }) {
               </div>
             )}
           </article>
-
-          {/* Camera Card */}
-          <article className="detail-card camera-card">
-            <div className="card-title-row">
-              <div>
-                <p className="eyebrow">Camera khu vườn</p>
-                <h2>Ảnh cây gần nhất</h2>
-              </div>
-              <span className="neutral-pill">Chưa triển khai</span>
-            </div>
-            <div className="image-placeholder">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <path d="M52 10H12a6 6 0 0 0-6 6v32a6 6 0 0 0 6 6h40a6 6 0 0 0 6-6V16a6 6 0 0 0-6-6ZM12 16h40v22l-9-9-11 11-6-6-14 14V16Zm0 32 14-14 12 12 5-5 7 7H12Zm8-17a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" />
-              </svg>
-              <strong>Chưa có dữ liệu</strong>
-              <span>Ảnh sẽ xuất hiện khi ESP32-CAM và module AI được kết nối ở phase sau.</span>
-            </div>
-          </article>
         </section>
       </main>
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px 24px' }}><WeatherCard /><IrrigationPanel deviceId={deviceId} /></div>
